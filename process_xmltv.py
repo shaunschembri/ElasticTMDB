@@ -5,12 +5,12 @@ import json
 import os
 import io
 import re
+import ConfigParser
 import xml.etree.ElementTree as et
 from datetime import datetime, timedelta
 import time
 import elastictmdb
 import preprocess
-import ConfigParser
 
 class xmltv(object):
     def __init__(self, logging):
@@ -155,7 +155,7 @@ class xmltv(object):
             #Try to decode title as unicode, if it fails use it undecoded
             try:
                 title.text = tmdbResult["_source"]["title"].decode("utf-8")
-            except:
+            except Exception:
                 title.text = tmdbResult["_source"]["title"]
             title.set("lang", tmdbResult["_source"]["language"])
             item.insert(0, title)
