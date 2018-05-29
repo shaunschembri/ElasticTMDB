@@ -265,8 +265,6 @@ class xmltv(object):
             xmlFile.write(et.tostring(self.output, encoding="UTF-8"))
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
-
     #Parse command line arguments
     argParser = argparse.ArgumentParser()
     argParser._action_groups.pop()
