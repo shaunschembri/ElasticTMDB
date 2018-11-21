@@ -14,5 +14,10 @@ def preprocess(item):
                 itemTitle = title
             else:
                 item.remove(itemTitle)
+
+    #Workaround for some grabbers appending garbage to subtitle element
+    subtitle = item.find('sub-title')
+    if subtitle is not None:
+        subtitle.text = re.sub('"},"parentId.*', '', subtitle.text)
     
     return item
