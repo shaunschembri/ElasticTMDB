@@ -19,5 +19,11 @@ def preprocess(item):
     subtitle = item.find('sub-title')
     if subtitle is not None:
         subtitle.text = re.sub('"},"parentId.*', '', subtitle.text)
-    
+
+    #Remove multiple whitespace and shorten polish football titles 
+    titles = item.findall('title')
+    for title in titles:
+        title.text = re.sub("  *", " ", title.text)
+        title.text = re.sub("Piłka nożna: ".decode("utf-8"), "", title.text)
+
     return item
