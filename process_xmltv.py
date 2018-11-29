@@ -88,7 +88,7 @@ class xmltv(object):
                             self.epgCategory[categoryName] = None
                         item.remove(category)
                     if itemContentType != None:
-                        category = et.SubElement(item, 'category')
+                        category = et.SubElement(item, 'category', lang="en")
                         category.text = itemContentType
 
                     #Remove rating as we will use the ones we have obtained from TMDB
