@@ -12,6 +12,9 @@ import re
 
 class ElasticTMDB(object):
     def __init__(self, logging):
+        #Logging
+        self.logging = logging
+
         config = ConfigParser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "elastictmdb.ini"))
 
@@ -34,23 +37,26 @@ class ElasticTMDB(object):
         #Load languages
         self.iso639 = self.load_iso639_languages()
 
-        #Misc parameters
         self.MAIN_LANGUAGE = config.get("main", "main_language")
+        self.IMAGE_BASE_URL = self.get_backgrounds_baseurl()
+        if self.IMAGE_BASE_URL:
+            self.IMAGE_BASE_URL += config.get("tmdb", "image_type")
+        else:
+            #Something failed with first request of TMDB, quiting
+            quit()
+
+        #Misc parameters
         self.EXCEPTION_LANGUAGE = config.get("main", "exception_language")
         self.LANGUAGES = config.get("main", "languages").split(",")
         self.COUNTRIES = config.get("main", "countries").split(",")
         self.YEAR_DIFF = config.getint("main", "year_diff")
         self.IMAGE_ASPECT_RATIO = config.getfloat("main", "image_aspect_ratio")
-        self.IMAGE_BASE_URL = self.get_backgrounds_baseurl() + config.get("tmdb", "image_type")
         self.MIN_SCORE_VALID = config.getint("main", "min_score_valid")
         self.MIN_SCORE_NO_SEARCH = config.getint("main", "min_score_no_search")
 
         #Elasticsearch document version control
         self.LATEST_VERSION = 2
         self.MIN_VERSION_FOR_DIFF_UPDATE = 2
-
-        #Logging
-        self.logging = logging
 
         if not config.getboolean("main", "extra_logging"):
             logging.getLogger("elasticsearch").setLevel(logging.WARNING)
@@ -84,18 +90,28 @@ class ElasticTMDB(object):
             if response["acknowledged"]:
                 self.logging.info("Created tmdb_search index")
 
-
     def send_request_get(self, endPoint=None):
         if "language" not in self.request:
             self.request["language"] = self.MAIN_LANGUAGE
         if endPoint != None:
             response = requests.get("https://api.themoviedb.org/3/" + endPoint, params=self.request)
-            self.request = self.defaultRequest # Reset request
-            return json.loads(response.content)
+            if response:
+                if response.status_code < 400:
+                    self.request = self.defaultRequest # Reset request
+                    return json.loads(response.content)
+                else:
+                    self.logging.error("Error Code " + str(response.status_code))
+                    self.logging.error(response.content)
+                    return None
+            else:
+                self.logging.error("Error Code " + str(response.status_code))
+                self.logging.error(response.content)
+                return None
 
     def get_backgrounds_baseurl(self):
         response = self.send_request_get("configuration")
-        return response["images"]["base_url"]
+        if response:
+            return response["images"]["base_url"]
 
     def search_movie(self, msg=None):
         if msg != None:
