@@ -77,15 +77,21 @@ class xmltv(object):
                     categories = item.findall('category')
                     for category in categories:
                         categoryName = category.text.lower()
-                        if categoryName in self.epgCategory:
-                            if self.epgCategory[categoryName] != None:
-                                if not itemContentType:
-                                    itemContentType = self.epgCategory[categoryName]
-                            if re.search("serie|téléfilm", categoryName, re.IGNORECASE):
-                                isSeries = True
-                        else:
-                            logging.info("Adding category - " + categoryName)
-                            self.epgCategory[categoryName] = None
+                        #Add category if it does not exists and tries to automap movie categories
+                        if categoryName not in self.epgCategory:
+                            if re.search("film|movie|cinema|drama|thriller", categoryName, re.IGNORECASE):
+                                logging.info("Adding category - %s and mapping it to Movie / Drama" % (categoryName))
+                                self.epgCategory[categoryName] = "Movie / Drama"
+                            else:
+                                logging.info("Adding category - %s" % (categoryName))
+                                self.epgCategory[categoryName] = None
+
+                        if self.epgCategory[categoryName] != None:
+                            if not itemContentType:
+                                itemContentType = self.epgCategory[categoryName]
+                        if re.search("serie|téléfilm", categoryName, re.IGNORECASE):
+                            isSeries = True
+
                         item.remove(category)
                     if itemContentType != None:
                         category = et.SubElement(item, 'category', lang="en")
