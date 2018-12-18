@@ -11,10 +11,8 @@ import os
 import re
 
 class ElasticTMDB(object):
-    def __init__(self, logging):
-        #Logging
-        self.logging = logging
-
+    def __init__(self):
+        self.logging = logging.getLogger()
         config = ConfigParser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "elastictmdb.ini"))
 
