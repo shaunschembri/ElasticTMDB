@@ -13,9 +13,11 @@ import elastictmdb
 import preprocess
 
 class xmltv(object):
-    def __init__(self, logging):
+    def __init__(self):
+        self.logging = logging.getLogger()
+        
         #Initialise ElasticTMDB
-        self.ElasticTMDB = elastictmdb.ElasticTMDB(logging)
+        self.ElasticTMDB = elastictmdb.ElasticTMDB()
         
         #Initialise output XMLTV object
         self.output = et.Element("tv")
@@ -46,9 +48,9 @@ class xmltv(object):
         self.channelPos = 0
 
     def process_file(self, filename):
-        logging.info("Parsing " + filename)
+        self.logging.info("Parsing " + filename)
         xmlTree = et.parse(filename).getroot()
-        logging.info("Parsing events")
+        self.logging.info("Parsing events")
 
         for item in xmlTree:
             try:                
@@ -80,10 +82,10 @@ class xmltv(object):
                         #Add category if it does not exists and tries to automap movie categories
                         if categoryName not in self.epgCategory:
                             if re.search("film|movie|cinema|drama|thriller", categoryName, re.IGNORECASE):
-                                logging.info("Adding category - %s and mapping it to Movie / Drama" % (categoryName))
+                                self.logging.info("Adding category - %s and mapping it to Movie / Drama" % (categoryName))
                                 self.epgCategory[categoryName] = "Movie / Drama"
                             else:
-                                logging.info("Adding category - %s" % (categoryName))
+                                self.logging.info("Adding category - %s" % (categoryName))
                                 self.epgCategory[categoryName] = None
 
                         if self.epgCategory[categoryName] != None:
@@ -118,7 +120,7 @@ class xmltv(object):
                                     item = self.process_movie(item)
             
             except Exception, e:
-                logging.error(e, exc_info=True)
+                self.logging.error(e, exc_info=True)
 
         #Save epg category
         with io.open(os.path.join(os.path.dirname(__file__), "epg_category.json"), 'w', encoding="utf-8") as jsonfile:
@@ -266,7 +268,7 @@ class xmltv(object):
 
     def save_file(self, filename):
         #Saving final xmltv file
-        logging.info("Saving to " + filename)
+        self.logging.info("Saving to " + filename)
         with open(os.path.join(filename), 'wb') as xmlFile:
             xmlFile.write(et.tostring(self.output, encoding="UTF-8"))
 
@@ -286,7 +288,7 @@ if __name__ == "__main__":
     else:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 
-    XMLTV = xmltv(logging)
+    XMLTV = xmltv()
     #Process input files
     for filename in args.input:
         XMLTV.process_file(filename)

@@ -4,10 +4,10 @@ import logging
 import json
 import elastictmdb
 
-logging.basicConfig(level=logging.CRITICAL, format="%(asctime)s %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 
 #Initialise ElasticTMDB
-ElasticTMDB = elastictmdb.ElasticTMDB(logging)
+ElasticTMDB = elastictmdb.ElasticTMDB()
 
 #Parse command line arguments
 argParser = argparse.ArgumentParser()
