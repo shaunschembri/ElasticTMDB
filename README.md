@@ -25,7 +25,7 @@ Obtain a key to The Movie Database to access the API. To obtain the API key, fol
 
 ### Configuring
 Clone or [download](https://github.com/shaunschembri/ElasticTMDB/archive/master.zip) this repository.
-Review settings in elastictmdb.ini. All options are documented in the file but if you are starting with a new/empty cache you only need to set the TMDB API key and the Elasticsearch connection details.
+Review settings in elastictmdb.conf. All options are documented in the file but if you are starting with a new/empty cache you only need to set the TMDB API key and the Elasticsearch connection details.
 
 ## Usage
 
@@ -127,7 +127,7 @@ Adult movie / Drama
 ```
 As the above categories also include TV shows, a programme should be a minimum of 70 minutes in length to be considered a movie.
 
-The preprocess.py file includes a python function that is executed before a programme is processed. The included function will remove all title tags except one with the attribute lang set to "xx" if this is present. This attribute contains the original name of the program hence replacing any localised version of the programme.  Pre-processing can be switched on inside the elastictmdb.ini config file.
+The preprocess.py file includes a python function that is executed before a programme is processed. The included function will remove all title tags except one with the attribute lang set to "xx" if this is present. This attribute contains the original name of the program hence replacing any localised version of the programme.  Pre-processing can be switched on inside the elastictmdb.conf config file.
 
 ```
 usage: process_xmltv.py [-h] [-i INPUT] [-o OUTPUT] [-l LOGFILE]
@@ -210,7 +210,7 @@ Score: 53.5</desc>
 </tv>
 ```
 ## Caveats
-* Changing the languages or countries in elastictmdb.ini will not automatically update the languages and/or countries of the movies that have already been cached in the database.
+* Changing the languages or countries in elastictmdb.conf will not automatically update the languages and/or countries of the movies that have already been cached in the database.
 * Matching improves as more and more movies are cached in Elasticsearch and might not be that accurate with only a few movies cached.
 
 ## Future Work

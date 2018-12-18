@@ -24,7 +24,7 @@ class xmltv(object):
 
         #Read config
         config = ConfigParser.ConfigParser()
-        config.read(os.path.join(os.path.dirname(__file__), "elastictmdb.ini"))
+        config.read(os.path.join(os.path.dirname(__file__), "elastictmdb.conf"))
         self.enablePreprocessing = config.getboolean("process_xmltv", "enable_preprocess_function")
         self.mainLanguage = config.get("main", "main_language")
         self.exceptionLanguage = config.get("main", "exception_language")
