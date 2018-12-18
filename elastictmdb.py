@@ -14,7 +14,7 @@ class ElasticTMDB(object):
     def __init__(self):
         self.logging = logging.getLogger()
         config = ConfigParser.ConfigParser()
-        config.read(os.path.join(os.path.dirname(__file__), "elastictmdb.ini"))
+        config.read(os.path.join(os.path.dirname(__file__), "elastictmdb.conf"))
 
         self.request = {}
         self.headers = {}
