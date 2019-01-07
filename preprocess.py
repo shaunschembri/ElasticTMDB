@@ -24,6 +24,6 @@ def preprocess(item):
     titles = item.findall('title')
     for title in titles:
         title.text = re.sub("  *", " ", title.text)
-        title.text = re.sub("Piłka nożna: ".decode("utf-8"), "", title.text)
+        title.text = re.sub("Piłka nożna: ", "", title.text)
 
     return item
