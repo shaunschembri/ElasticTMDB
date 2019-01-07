@@ -14,7 +14,7 @@ ElasticTMDB is a Python3 class which sources movie details from The Movie Databa
 ### Python Modules
 Install dependencies by executing
 ```
-pip3 install -f requirements.txt
+pip3 install -r requirements.txt
 ```
 
 ### Elasticsearch Server
