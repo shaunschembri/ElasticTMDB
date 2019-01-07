@@ -5,7 +5,8 @@ import json
 import os
 import io
 import re
-import ConfigParser
+import sys
+import configparser
 import xml.etree.ElementTree as et
 from datetime import datetime, timedelta
 import time
@@ -23,7 +24,7 @@ class xmltv(object):
         self.output = et.Element("tv")
 
         #Read config
-        config = ConfigParser.ConfigParser()
+        config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "elastictmdb.conf"))
         self.enablePreprocessing = config.getboolean("process_xmltv", "enable_preprocess_function")
         self.mainLanguage = config.get("main", "main_language")
@@ -53,7 +54,7 @@ class xmltv(object):
         self.logging.info("Parsing events")
 
         for item in xmlTree:
-            try:                
+            #try:                
                 if item.tag == 'channel':
                     #Remove icons
                     icons = item.findall('icon')
@@ -119,8 +120,14 @@ class xmltv(object):
                                 if self.get_unixtime_from_ts(stop) - self.get_unixtime_from_ts(start) >= 4200:
                                     item = self.process_movie(item)
             
-            except Exception, e:
-                self.logging.error(e, exc_info=True)
+            # except Exception as e:
+            #     exc_type, exc_obj, tb = sys.exc_info()
+            #     f = tb.tb_frame
+            #     lineno = tb.tb_lineno
+            #     filename = f.f_code.co_filename
+            #     template = "Exception: {0}. in file {1} line {2}\nArguments:{3!r}\n"
+            #     message = template.format(type(e).__name__, filename, lineno, e.args)
+            #     logging.error(message)
 
         #Save epg category
         with io.open(os.path.join(os.path.dirname(__file__), "epg_category.json"), 'w', encoding="utf-8") as jsonfile:
@@ -160,11 +167,7 @@ class xmltv(object):
 
             #Set title
             title = et.Element('title')
-            #Try to decode title as unicode, if it fails use it undecoded
-            try:
-                title.text = tmdbResult["_source"]["title"].decode("utf-8")
-            except Exception:
-                title.text = tmdbResult["_source"]["title"]
+            title.text = tmdbResult["_source"]["title"]
             title.set("lang", tmdbResult["_source"]["language"])
             item.insert(0, title)
 
@@ -185,13 +188,13 @@ class xmltv(object):
                 icon = item.find('icon')
                 if icon is None:
                     icon = et.SubElement(item, 'icon')
-                icon.set("src", tmdbResult["_source"]["image"].decode("utf-8"))
+                icon.set("src", tmdbResult["_source"]["image"])
 
             #Set description
             desc = item.find('desc')
             if desc is None:
                 desc = et.SubElement(item, 'desc')
-            desc.text = self.build_movie_description(tmdbResult).decode("utf-8")
+            desc.text = self.build_movie_description(tmdbResult)
             if tmdbResult["_source"]["language"] == self.exceptionLanguage:
                 desc.set("lang", self.exceptionLanguage)
             else:

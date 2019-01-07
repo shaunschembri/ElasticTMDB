@@ -3,7 +3,7 @@ import json
 import datetime
 import logging
 import requests
-import ConfigParser
+import configparser
 import argparse
 import elasticsearch
 import sys
@@ -13,7 +13,7 @@ import re
 class ElasticTMDB(object):
     def __init__(self):
         self.logging = logging.getLogger()
-        config = ConfigParser.ConfigParser()
+        config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "elastictmdb.conf"))
 
         self.request = {}
