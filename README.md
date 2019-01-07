@@ -1,7 +1,8 @@
+# This branch is still work in progress.  For a stable version use the python2 version in the master branch
 
 # ElasticTMDB
 
-ElasticTMDB is a Python 2 class which sources movie details from The Movie Database (TMDB) and caches them in an Elasticsearch index to speed up subsequent queries to the same movie. The class will store a lot of information about a movie (cast, director, synopsis, user ratings, release year, poster etc) together with the movie title in a number of languages.  This is particularly useful to convert a movie programme listed in its foreign language title to its original language title.
+ElasticTMDB is a Python3 class which sources movie details from The Movie Database (TMDB) and caches them in an Elasticsearch index to speed up subsequent queries to the same movie. The class will store a lot of information about a movie (cast, director, synopsis, user ratings, release year, poster etc) together with the movie title in a number of languages.  This is particularly useful to convert a movie programme listed in its foreign language title to its original language title.
 
 ## Getting Started
 
@@ -224,7 +225,7 @@ This project has been developed for my personal use and I consider it as feature
 * Dynamically increase min_score_valid and min_score_no_search parameters based on the number of movies already cached in ElasticSearch.
 * Allow for customisation of the description string returned by process_xmltv.py to be able to change order and allow for non-English static text.
 * Extend ElasticTMDB to cover also TV shows.
-* Migrate to Python3 as Python2 will soon approch [EOL](https://pythonclock.org/).
+* ~~Migrate to Python3 as Python2 will soon approch [EOL](https://pythonclock.org/).~~
 * Ability to increase the document version in Elasticsearch, so that movies can be updated after a language or country has been added to the configuration.
 
 ## License

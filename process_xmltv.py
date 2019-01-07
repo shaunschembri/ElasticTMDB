@@ -54,7 +54,7 @@ class xmltv(object):
         self.logging.info("Parsing events")
 
         for item in xmlTree:
-            #try:                
+            try:                
                 if item.tag == 'channel':
                     #Remove icons
                     icons = item.findall('icon')
@@ -120,23 +120,23 @@ class xmltv(object):
                                 if self.get_unixtime_from_ts(stop) - self.get_unixtime_from_ts(start) >= 4200:
                                     item = self.process_movie(item)
             
-            # except Exception as e:
-            #     exc_type, exc_obj, tb = sys.exc_info()
-            #     f = tb.tb_frame
-            #     lineno = tb.tb_lineno
-            #     filename = f.f_code.co_filename
-            #     template = "Exception: {0}. in file {1} line {2}\nArguments:{3!r}\n"
-            #     message = template.format(type(e).__name__, filename, lineno, e.args)
-            #     logging.error(message)
+            except Exception as e:
+                exc_type, exc_obj, tb = sys.exc_info()
+                f = tb.tb_frame
+                lineno = tb.tb_lineno
+                filename = f.f_code.co_filename
+                template = "Exception: {0}. in file {1} line {2}\nArguments:{3!r}\n"
+                message = template.format(type(e).__name__, filename, lineno, e.args)
+                logging.error(message)
 
         #Save epg category
         with io.open(os.path.join(os.path.dirname(__file__), "epg_category.json"), 'w', encoding="utf-8") as jsonfile:
-            jsonfile.write(unicode(json.dumps(self.epgCategory, ensure_ascii=False, indent=3, sort_keys=True)))
+            jsonfile.write(json.dumps(self.epgCategory, ensure_ascii=False, indent=3, sort_keys=True))
 
     def process_movie(self, item):
         itemTitle = item.findall('title')[0]
         msg = {}
-        msg["title"] = itemTitle.text.encode("utf-8")
+        msg["title"] = itemTitle.text
 
         #Date
         year = item.find('date')
@@ -152,11 +152,11 @@ class xmltv(object):
             for director in persons.findall("director"):
                 if "director" not in msg:
                     msg["director"] = []
-                msg["director"].append(director.text.encode('utf-8'))
+                msg["director"].append(director.text)
             for cast in persons.findall("actor"):
                 if "cast" not in msg:
                     msg["cast"] = []
-                msg["cast"].append(cast.text.encode('utf-8'))
+                msg["cast"].append(cast.text)
 
         tmdbResult = self.ElasticTMDB.search_movie(msg)
         if tmdbResult:
@@ -167,7 +167,11 @@ class xmltv(object):
 
             #Set title
             title = et.Element('title')
-            title.text = tmdbResult["_source"]["title"]
+            #Try to decode title as unicode, if it fails use it undecoded
+            try:
+                title.text = tmdbResult["_source"]["title"]
+            except Exception:
+                title.text = tmdbResult["_source"]["title"]
             title.set("lang", tmdbResult["_source"]["language"])
             item.insert(0, title)
 
@@ -177,9 +181,9 @@ class xmltv(object):
                 subtitle = et.SubElement(item, 'sub-title')
 
             if tmdbResult["_source"]["genre"]:
-                subtitle.text = str(tmdbResult["_source"]["year"]).encode("UTF-8") + " - " + ", ".join(tmdbResult["_source"]["genre"]).encode("UTF-8")
+                subtitle.text = str(tmdbResult["_source"]["year"]) + " - " + ", ".join(tmdbResult["_source"]["genre"])
             else:
-                subtitle.text = str(tmdbResult["_source"]["year"]).encode("UTF-8")
+                subtitle.text = str(tmdbResult["_source"]["year"])
 
             subtitle.set("lang", self.mainLanguage)
 
@@ -230,34 +234,34 @@ class xmltv(object):
         if tmdbResult != None:
             desc = []
             if 'cast' in tmdbResult["_source"]:
-                desc.append("Cast: " + ", ".join(tmdbResult["_source"]["cast"][:5]).encode("UTF-8"))
+                desc.append("Cast: " + ", ".join(tmdbResult["_source"]["cast"][:5]))
 
             if 'director' in tmdbResult["_source"]:
-                desc.append("Director: " + ", ".join(tmdbResult["_source"]["director"]).encode("UTF-8"))
+                desc.append("Director: " + ", ".join(tmdbResult["_source"]["director"]))
             
             if 'rating' in tmdbResult["_source"]:
-                desc.append("Rating: " + str(tmdbResult["_source"]["rating"]).encode("UTF-8"))
+                desc.append("Rating: " + str(tmdbResult["_source"]["rating"]))
             
             if 'description' in tmdbResult["_source"]:
-                desc.append("\n" + tmdbResult["_source"]["description"].encode("UTF-8") +"\n")
+                desc.append("\n" + tmdbResult["_source"]["description"] +"\n")
 
             if 'year' in tmdbResult["_source"]:
-                desc.append("Year: " + str(tmdbResult["_source"]["year"]).encode("UTF-8"))
+                desc.append("Year: " + str(tmdbResult["_source"]["year"]))
             
             if 'genre' in tmdbResult["_source"]:
-                desc.append("Genre: " + ", ".join(tmdbResult["_source"]["genre"]).encode("UTF-8"))
+                desc.append("Genre: " + ", ".join(tmdbResult["_source"]["genre"]))
             
             if 'language' in tmdbResult["_source"]:
-                desc.append("Language: " + self.ElasticTMDB.get_language(tmdbResult["_source"]["language"]).encode("UTF-8"))
+                desc.append("Language: " + self.ElasticTMDB.get_language(tmdbResult["_source"]["language"]))
             
             if 'country' in tmdbResult["_source"]:
-                desc.append("Country: " + ", ".join(tmdbResult["_source"]["country"]).encode("UTF-8"))
+                desc.append("Country: " + ", ".join(tmdbResult["_source"]["country"]))
             
             if 'popularity' in tmdbResult["_source"]:
-                desc.append("Popularity: " + str(round(tmdbResult["_source"]["popularity"], 1)).encode("UTF-8"))
+                desc.append("Popularity: " + str(round(tmdbResult["_source"]["popularity"], 1)))
 
             if '_score' in tmdbResult:
-                desc.append("Score: " + str(round(tmdbResult["_score"], 1)).encode("UTF-8"))
+                desc.append("Score: " + str(round(tmdbResult["_score"], 1)))
             
             return "\n".join(desc)
 
