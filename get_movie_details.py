@@ -34,4 +34,39 @@ if args.year:
 if args.force:
     msg["force"] = args.force
 
-print(json.dumps(ElasticTMDB.search_movie(msg), indent=1))
+def build_movie_description(tmdbResult):
+    if tmdbResult != None:
+        desc = []
+        if 'cast' in tmdbResult["_source"]:
+            desc.append("Cast: " + ", ".join(tmdbResult["_source"]["cast"][:5]))
+
+        if 'director' in tmdbResult["_source"]:
+            desc.append("Director: " + ", ".join(tmdbResult["_source"]["director"]))
+        
+        if 'rating' in tmdbResult["_source"]:
+            desc.append("Rating: " + str(tmdbResult["_source"]["rating"]))
+        
+        if 'description' in tmdbResult["_source"]:
+            desc.append("\n" + tmdbResult["_source"]["description"] +"\n")
+
+        if 'year' in tmdbResult["_source"]:
+            desc.append("Year: " + str(tmdbResult["_source"]["year"]))
+        
+        if 'genre' in tmdbResult["_source"]:
+            desc.append("Genre: " + ", ".join(tmdbResult["_source"]["genre"]))
+        
+       
+        if 'country' in tmdbResult["_source"]:
+            desc.append("Country: " + ", ".join(tmdbResult["_source"]["country"]))
+        
+        if 'popularity' in tmdbResult["_source"]:
+            desc.append("Popularity: " + str(round(tmdbResult["_source"]["popularity"], 1)))
+
+        if '_score' in tmdbResult:
+            desc.append("Score: " + str(round(tmdbResult["_score"], 1)))
+        
+        return "\n".join(desc)
+
+result = ElasticTMDB.search_movie(msg)
+#print(json.dumps(ElasticTMDB.search_movie(msg), indent=1))
+print(build_movie_description(result))
