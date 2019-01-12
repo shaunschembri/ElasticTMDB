@@ -263,7 +263,10 @@ class xmltv(object):
             if '_score' in tmdbResult:
                 desc.append("Score: " + str(round(tmdbResult["_score"], 1)))
             
-            return "\n".join(desc)
+            result = "\n".join(desc)
+            #Remove this character which crashes importing in enigma2 devices
+            result = re.sub('','', result)
+            return result
 
     def get_unixtime_from_ts(self, t):
         ret = datetime.strptime(t[0:13], "%Y%m%d%H%M%S")
