@@ -1,5 +1,3 @@
-# This branch is still work in progress.  For a stable version use the python2 version in the master branch
-
 # ElasticTMDB
 
 ElasticTMDB is a Python3 class which sources movie details from The Movie Database (TMDB) and caches them in an Elasticsearch index to speed up subsequent queries to the same movie. The class will store a lot of information about a movie (cast, director, synopsis, user ratings, release year, poster etc) together with the movie title in a number of languages.  This is particularly useful to convert a movie programme listed in its foreign language title to its original language title.
@@ -7,7 +5,7 @@ ElasticTMDB is a Python3 class which sources movie details from The Movie Databa
 ## Getting Started
 
 ### Prerequisites
-* Python 3.6 or newer
+* Python 3.6 or newer (for Python 2.7 use the python2 tag/release)
 * Elasticsearch Server 6.0 or newer
 * TMDB API key
 
