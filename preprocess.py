@@ -9,7 +9,8 @@ def preprocess(item):
         if itemTitle == None:
             itemTitle = title
         else:
-            if title.attrib["lang"] == "xx":
+            #Prioritise English or Original language titles
+            if title.attrib["lang"] in ["en", "xx"]:
                 item.remove(itemTitle)
                 itemTitle = title
             else:
