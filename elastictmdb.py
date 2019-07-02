@@ -152,13 +152,13 @@ class ElasticTMDB(object):
                     self.cache_movie(movie)
                     #Fetch again updated result from DB and save score from search done before
                     score = result[0]["_score"]
-                    result = self.es.get(index='tmdb', doc_type='movie', id=result[0]["_id"], ignore=404)
+                    result = self.es.get(index='tmdb', id=result[0]["_id"], ignore=404)
                     result["_score"] = score
                     result["_source"]["image"] = self.IMAGE_BASE_URL + result["_source"]["image"]
                     return result
                 else:
                     self.logging.info("Deleting " + result[0]["_source"]["title"] + " as its not found on TMDB")
-                    self.es.delete(index='tmdb', doc_type='movie', id=result[0]["_id"])
+                    self.es.delete(index='tmdb', id=result[0]["_id"])
                     return result[0]
             else:
                 result[0]["_source"]["image"] = self.IMAGE_BASE_URL + result[0]["_source"]["image"]
@@ -199,7 +199,7 @@ class ElasticTMDB(object):
         #print json.dumps(query, indent=3)
 
         self.es.indices.refresh(index='tmdb')
-        result = self.es.search(index="tmdb", doc_type='movie', body=query)
+        result = self.es.search(index="tmdb", body=query)
         if result["hits"]["total"] > 0:
             if result["hits"]["hits"][0]["_score"] >= self.MIN_SCORE_VALID:
                 return result["hits"]["hits"][0], result["hits"]["hits"][0]["_score"]
@@ -223,7 +223,7 @@ class ElasticTMDB(object):
         query["query"]["bool"]["must"].append({"term": {"director_name":  self.msg["director"][0]}})
         query["query"]["bool"]["must"].append({"term": {"year":  self.msg["year"]}})
         self.es.indices.refresh(index='tmdb_search')
-        result = self.es.search(index="tmdb_search", doc_type='search', body=query)
+        result = self.es.search(index="tmdb_search", body=query)
 
         if result["hits"]["total"] == 0:
             #Query TMDB for person
@@ -255,7 +255,7 @@ class ElasticTMDB(object):
                 body = {}
                 body["director_name"] = self.msg["director"][0]
                 body["year"] = self.msg["year"]
-                self.es.index(index='tmdb_search', doc_type='search', body=body)
+                self.es.index(index='tmdb_search', body=body)
 
             else:
                 self.logging.debug("Already searched for " + self.msg["director"][0] + " filmography for year " + str(self.msg["year"]))
@@ -270,7 +270,7 @@ class ElasticTMDB(object):
         query["query"]["term"] = {}
         query["query"]["term"]["movie_title"] = self.msg["title"]
         self.es.indices.refresh(index='tmdb_search')
-        result = self.es.search(index="tmdb_search", doc_type='search', body=query)
+        result = self.es.search(index="tmdb_search", body=query)
         #print json.dumps(result, indent=3)
         
         if result["hits"]["total"] == 0:
@@ -298,14 +298,14 @@ class ElasticTMDB(object):
             #Save that movie title to avoid doing the same search again
             body = {}
             body["movie_title"] = self.msg["title"]
-            self.es.index(index='tmdb_search', doc_type='search', body=body)
+            self.es.index(index='tmdb_search', body=body)
 
         else:
             self.logging.debug("Already searched for movie " + self.msg["title"])
 
     def cache_movie(self, movie=None):
         #Search elastic to get current version stored
-        record = self.es.get(index='tmdb', doc_type='movie', id=movie["id"], ignore=404)
+        record = self.es.get(index='tmdb', id=movie["id"], ignore=404)
 
         #print json.dumps(record, indent=3)
         if record["found"] == True:
@@ -439,7 +439,7 @@ class ElasticTMDB(object):
         
         record["version"] = self.LATEST_VERSION
         #record["last_updated"] = datetime.datetime.now().isoformat()
-        self.es.index(index='tmdb', doc_type='movie', id=movie["id"], body=record)
+        self.es.index(index='tmdb', id=movie["id"], body=record)
 
     def check_for_dup(self, title, alias, orgTitle):
         if not alias:
