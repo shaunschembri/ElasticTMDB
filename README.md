@@ -6,7 +6,7 @@ ElasticTMDB is a Python3 library which sources movie details from The Movie Data
 
 ### Prerequisites
 * Python 3.6 or newer (for Python 2.7 use the python2 tag/release)
-* Elasticsearch Server 7.x (python2 release support ES6.x)
+* Elasticsearch Server 7.x (python2 release supports ES6.x)
 * TMDB API key
 
 ### Python Modules
@@ -16,7 +16,7 @@ pip3 install -r requirements.txt
 ```
 
 ### Elasticsearch Server
-Follow the instructions [here](https://www.elastic.co/downloads/elasticsearch) to install a fresh Elasticsearch server.  If you already have Elasticsearch installed, you can use it along side other applications as ElasticTMDB will create 2 new indexes on first execution and will not interfere with any other indexes present.
+Follow the instructions [here](https://www.elastic.co/downloads/elasticsearch) to install a fresh Elasticsearch server.  If you already have Elasticsearch installed, you can use it along side other applications as ElasticTMDB will create 2 new indexes on first execution and will not interfere with any other indexes present.  The indexes will created with 1 shard and no replicas so optimised for a single node cluster. Please modify the number_of_shards and number_of_replicas value in the [mapping](mapping) files if you would like to create the indexes with more shards and with replicas.
 
 ### TMDB API Key
 Obtain a key to The Movie Database to access the API. To obtain the API key, follow these steps:
