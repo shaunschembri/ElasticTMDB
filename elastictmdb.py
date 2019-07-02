@@ -9,6 +9,7 @@ import elasticsearch
 import sys
 import os
 import re
+import json
 
 class ElasticTMDB(object):
     def __init__(self):
@@ -67,25 +68,18 @@ class ElasticTMDB(object):
 
     def check_elastic_indices(self):
         if not self.es.indices.exists(index="tmdb"):
-            response = self.es.indices.create(index='tmdb')
+            mappingFile = open(os.path.join(os.path.dirname(__file__), "mapping", "tmdb.json"), "r")
+            indexSettings = mappingFile.read()
+            mappingFile.close()
+            response = self.es.indices.create(index='tmdb', body=indexSettings)
             if response["acknowledged"]:
                 self.logging.info("Created tmdb index")
 
         if not self.es.indices.exists(index="tmdb_search"):
-            body = {}
-            body["mappings"] = {}
-            body["mappings"]["search"] = {}
-            body["mappings"]["search"]["properties"] = {}
-            body["mappings"]["search"]["properties"]["movie_title"] = {}
-            body["mappings"]["search"]["properties"]["movie_title"]["type"] = "keyword"
-            body["mappings"]["search"]["properties"]["movie_title"]["index"] = True
-            body["mappings"]["search"]["properties"]["director_name"] = {}
-            body["mappings"]["search"]["properties"]["director_name"]["type"] = "keyword"
-            body["mappings"]["search"]["properties"]["director_name"]["index"] = True
-            body["mappings"]["search"]["properties"]["year"] = {}
-            body["mappings"]["search"]["properties"]["year"]["type"] = "integer"
-            body["mappings"]["search"]["properties"]["year"]["index"] = True
-            response = self.es.indices.create(index='tmdb_search', body=body)
+            mappingFile = open(os.path.join(os.path.dirname(__file__), "mapping", "tmdb_search.json"), "r")
+            indexSettings = mappingFile.read()
+            mappingFile.close()
+            response = self.es.indices.create(index='tmdb_search', body=indexSettings)
             if response["acknowledged"]:
                 self.logging.info("Created tmdb_search index")
 
@@ -200,11 +194,11 @@ class ElasticTMDB(object):
             year["bool"]["should"].append({"match": {"year_other": self.msg["year"]}})
             query["query"]["bool"]["must"].append(year)
 
-        #print json.dumps(query, indent=3)
+        #print(json.dumps(query, indent=3))
 
         self.es.indices.refresh(index='tmdb')
         result = self.es.search(index="tmdb", body=query)
-        if result["hits"]["total"] > 0:
+        if result["hits"]["total"]["value"] > 0:
             if result["hits"]["hits"][0]["_score"] >= self.MIN_SCORE_VALID:
                 return result["hits"]["hits"][0], result["hits"]["hits"][0]["_score"]
             else:
@@ -229,7 +223,7 @@ class ElasticTMDB(object):
         self.es.indices.refresh(index='tmdb_search')
         result = self.es.search(index="tmdb_search", body=query)
 
-        if result["hits"]["total"] == 0:
+        if result["hits"]["total"]["value"] == 0:
             #Query TMDB for person
             self.request["include_adult"] = "false"
             self.request["page"] = 1
@@ -277,7 +271,7 @@ class ElasticTMDB(object):
         result = self.es.search(index="tmdb_search", body=query)
         #print json.dumps(result, indent=3)
         
-        if result["hits"]["total"] == 0:
+        if result["hits"]["total"]["value"] == 0:
             self.request["include_adult"] = "false"
             self.request["page"] = 1
             self.request["query"] = self.msg["title"]
