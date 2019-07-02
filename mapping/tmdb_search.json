@@ -3,11 +3,17 @@
         "number_of_shards": 1,
         "number_of_replicas": 0
     },
-    "mappings": {
-        "properties": {
-            "movie_title": {
-                "type": "keyword"
-            }
+    "mappings" : {
+        "properties" : {
+          "director_name" : {
+            "type" : "keyword"
+          },
+          "movie_title" : {
+            "type" : "keyword"
+          },
+          "year" : {
+            "type" : "short"
+          }
         }
-    }
+      }
 }
