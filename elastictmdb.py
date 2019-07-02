@@ -138,7 +138,10 @@ class ElasticTMDB(object):
                     self.search_movie_tmdb_by_name()
                     result = self.query_for_movie()
         else:
-            self.logging.debug("Found " + result[0]["_source"]["title"] + " without quering TMDB - Score " + str(result[1]))
+            if result[0]:
+                self.logging.debug("Found " + result[0]["_source"]["title"] + " without quering TMDB - Score " + str(result[1]))
+            else:
+                self.logging.debug("No results found " + str(result[1]))
         
         if result[1] < self.MIN_SCORE_NO_SEARCH and "year" in self.msg:
             result = self.query_for_movie(yearDiff=1)
@@ -333,7 +336,7 @@ class ElasticTMDB(object):
             else:
                 record["language"] = "Unknown"
 
-            #if original language is self.LANGUAGES then use orginal title else stick with english version
+            #if original language is self.LANGUAGES then use original title else stick with english version
             record["alias"] = []
             if record["language"] in self.LANGUAGES:
                 record["title"] = movie["original_title"]
