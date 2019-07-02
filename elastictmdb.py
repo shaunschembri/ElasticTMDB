@@ -9,7 +9,6 @@ import elasticsearch
 import sys
 import os
 import re
-import json
 
 class ElasticTMDB(object):
     def __init__(self):
