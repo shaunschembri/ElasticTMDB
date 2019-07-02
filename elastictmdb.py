@@ -30,6 +30,7 @@ class ElasticTMDB(object):
         elasticAuth = (config.get("elasticsearch", "username"), config.get("elasticsearch", "password"))
         self.es = elasticsearch.Elasticsearch([config.get("elasticsearch", "host")], \
                                                 port=config.getint("elasticsearch", "port"),\
+                                                scheme=config.get("elasticsearch", "scheme"),\
                                                 http_auth=elasticAuth)
 
         #Load languages
