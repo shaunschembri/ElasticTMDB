@@ -193,7 +193,8 @@ class ElasticTMDB(object):
             year["bool"]["should"].append({"match": {"year_other": self.msg["year"]}})
             query["query"]["bool"]["must"].append(year)
 
-        #print(json.dumps(query, indent=3))
+        # import json
+        # print(json.dumps(query, indent=3))
 
         self.es.indices.refresh(index='tmdb')
         result = self.es.search(index="tmdb", body=query)
@@ -439,7 +440,7 @@ class ElasticTMDB(object):
         self.es.index(index='tmdb', id=movie["id"], body=record)
 
     def check_for_dup(self, title, alias, orgTitle):
-        if not alias:
+        if alias:
             for altTitle in alias:
                 if re.search("^" + title + "$", altTitle, flags=re.IGNORECASE):
                     return False
