@@ -1,12 +1,12 @@
 # ElasticTMDB
 
-ElasticTMDB is a Python3 class which sources movie details from The Movie Database (TMDB) and caches them in an Elasticsearch index to speed up subsequent queries to the same movie. The class will store a lot of information about a movie (cast, director, synopsis, user ratings, release year, poster etc) together with the movie title in a number of languages.  This is particularly useful to convert a movie programme listed in its foreign language title to its original language title.
+ElasticTMDB is a Python3 library which sources movie details from The Movie Database (TMDB) and caches them in an Elasticsearch index to speed up subsequent queries to the same movie. The class will store a lot of information about a movie (cast, director, synopsis, user ratings, release year, poster etc) together with the movie title in a number of languages.  This is particularly useful to convert a movie programme listed in its foreign language title to its original language title.
 
 ## Getting Started
 
 ### Prerequisites
 * Python 3.6 or newer (for Python 2.7 use the python2 tag/release)
-* Elasticsearch Server 6.0 or newer
+* Elasticsearch Server 7.x (python2 release supports ES6.x)
 * TMDB API key
 
 ### Python Modules
@@ -16,7 +16,7 @@ pip3 install -r requirements.txt
 ```
 
 ### Elasticsearch Server
-Follow the instructions [here](https://www.elastic.co/downloads/elasticsearch) to install a fresh Elasticsearch server.  If you already have Elasticsearch installed, you can use it along side other applications as ElasticTMDB will create 2 new indexes on first execution and will not interfere with any other indexes present.
+Follow the instructions [here](https://www.elastic.co/downloads/elasticsearch) to install a fresh Elasticsearch server.  If you already have Elasticsearch installed, you can use it along side other applications as ElasticTMDB will create 2 new indexes on first execution and will not interfere with any other indexes present.  The indexes will created with 1 shard and no replicas so optimised for a single node cluster. Please modify the number_of_shards and number_of_replicas value in the [mapping](mapping) files if you would like to create the indexes with more shards and with replicas.
 
 ### TMDB API Key
 Obtain a key to The Movie Database to access the API. To obtain the API key, follow these steps:
@@ -53,7 +53,7 @@ optional arguments:
 ```
 Example
 ```
-python get_movie_details.py -t "Stirb langsam" -y 1988 -c "Bruce Willis" -c "Alan Rickman" -d "John McTiernan"
+python3 get_movie_details.py -t "Stirb langsam" -y 1988 -c "Bruce Willis" -c "Alan Rickman" -d "John McTiernan"
 ```
 Result
 ```
@@ -114,7 +114,7 @@ Result
 
 ### process_xmltv
 
-A more useful application of ElasticTMDB class is the process_xmltv.py utlity, which takes one or more [XMLTV](http://wiki.xmltv.org/index.php/Main_Page) files, detect movies in the programmes listed and outputs an XMLTV file with the detected movie's description replaced with data sourced from TMDB.  Other programme listings are not touched.
+A more useful application of ElasticTMDB class is the process_xmltv.py utility, which takes one or more [XMLTV](http://wiki.xmltv.org/index.php/Main_Page) files, detect movies in the programmes listed and outputs an XMLTV file with the detected movie's description replaced with data sourced from TMDB.  Other programme listings are not touched.
 
 The utility will detect a movie based on the category of the programme.  According to the DVB EIT specification a movie should have one of the below categories, however as many XMLTV files contains different terms for these categories, you can map the provider categories to any one of the below in the epg_category.json. New categories are automatically added in epg_category.json as discovered by process_xmltv.py.
 ```
@@ -145,7 +145,7 @@ optional arguments:
 ```
 Example
 ```
-python process_xmltv.py -i input.xml -o output.xml
+python3 process_xmltv.py -i input.xml -o output.xml
 ```
 Input XMLTV file (input.xml)
 ```
@@ -225,6 +225,7 @@ This project has been developed for my personal use and I consider it as feature
 * Extend ElasticTMDB to cover also TV shows.
 * ~~Migrate to Python3 as Python2 will soon approch [EOL](https://pythonclock.org/).~~
 * Ability to increase the document version in Elasticsearch, so that movies can be updated after a language or country has been added to the configuration.
+* ~~Migrate to Elasticsearch 7.x and optimise index mappings.~~
 
 ## License
 
