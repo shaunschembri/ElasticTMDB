@@ -45,7 +45,7 @@ class xmltv(object):
         with open(os.path.join(os.path.dirname(__file__), "epg_category.json"), mode="r") as jsonfile:
             self.epgCategory = json.load(jsonfile, encoding="utf-8")
 
-        #Store last channel defiition position. This is used so that all channel elemnets are at the top of the file as required by the XMLTV standard
+        #Store last channel definition position. This is used so that all channel elemnets are at the top of the file as required by the XMLTV standard
         self.channelPos = 0
 
     def process_file(self, filename):

@@ -30,6 +30,7 @@ class ElasticTMDB(object):
         elasticAuth = (config.get("elasticsearch", "username"), config.get("elasticsearch", "password"))
         self.es = elasticsearch.Elasticsearch([config.get("elasticsearch", "host")], \
                                                 port=config.getint("elasticsearch", "port"),\
+                                                scheme=config.get("elasticsearch", "scheme"),\
                                                 http_auth=elasticAuth)
 
         #Load languages
@@ -66,25 +67,18 @@ class ElasticTMDB(object):
 
     def check_elastic_indices(self):
         if not self.es.indices.exists(index="tmdb"):
-            response = self.es.indices.create(index='tmdb')
+            mappingFile = open(os.path.join(os.path.dirname(__file__), "mapping", "tmdb.json"), "r")
+            indexSettings = mappingFile.read()
+            mappingFile.close()
+            response = self.es.indices.create(index='tmdb', body=indexSettings)
             if response["acknowledged"]:
                 self.logging.info("Created tmdb index")
 
         if not self.es.indices.exists(index="tmdb_search"):
-            body = {}
-            body["mappings"] = {}
-            body["mappings"]["search"] = {}
-            body["mappings"]["search"]["properties"] = {}
-            body["mappings"]["search"]["properties"]["movie_title"] = {}
-            body["mappings"]["search"]["properties"]["movie_title"]["type"] = "keyword"
-            body["mappings"]["search"]["properties"]["movie_title"]["index"] = True
-            body["mappings"]["search"]["properties"]["director_name"] = {}
-            body["mappings"]["search"]["properties"]["director_name"]["type"] = "keyword"
-            body["mappings"]["search"]["properties"]["director_name"]["index"] = True
-            body["mappings"]["search"]["properties"]["year"] = {}
-            body["mappings"]["search"]["properties"]["year"]["type"] = "integer"
-            body["mappings"]["search"]["properties"]["year"]["index"] = True
-            response = self.es.indices.create(index='tmdb_search', body=body)
+            mappingFile = open(os.path.join(os.path.dirname(__file__), "mapping", "tmdb_search.json"), "r")
+            indexSettings = mappingFile.read()
+            mappingFile.close()
+            response = self.es.indices.create(index='tmdb_search', body=indexSettings)
             if response["acknowledged"]:
                 self.logging.info("Created tmdb_search index")
 
@@ -137,7 +131,10 @@ class ElasticTMDB(object):
                     self.search_movie_tmdb_by_name()
                     result = self.query_for_movie()
         else:
-            self.logging.debug("Found " + result[0]["_source"]["title"] + " without quering TMDB - Score " + str(result[1]))
+            if result[0]:
+                self.logging.debug("Found " + result[0]["_source"]["title"] + " without quering TMDB - Score " + str(result[1]))
+            else:
+                self.logging.debug("No results found " + str(result[1]))
         
         if result[1] < self.MIN_SCORE_NO_SEARCH and "year" in self.msg:
             result = self.query_for_movie(yearDiff=1)
@@ -152,13 +149,13 @@ class ElasticTMDB(object):
                     self.cache_movie(movie)
                     #Fetch again updated result from DB and save score from search done before
                     score = result[0]["_score"]
-                    result = self.es.get(index='tmdb', doc_type='movie', id=result[0]["_id"], ignore=404)
+                    result = self.es.get(index='tmdb', id=result[0]["_id"], ignore=404)
                     result["_score"] = score
                     result["_source"]["image"] = self.IMAGE_BASE_URL + result["_source"]["image"]
                     return result
                 else:
                     self.logging.info("Deleting " + result[0]["_source"]["title"] + " as its not found on TMDB")
-                    self.es.delete(index='tmdb', doc_type='movie', id=result[0]["_id"])
+                    self.es.delete(index='tmdb', id=result[0]["_id"])
                     return result[0]
             else:
                 result[0]["_source"]["image"] = self.IMAGE_BASE_URL + result[0]["_source"]["image"]
@@ -196,11 +193,12 @@ class ElasticTMDB(object):
             year["bool"]["should"].append({"match": {"year_other": self.msg["year"]}})
             query["query"]["bool"]["must"].append(year)
 
-        #print json.dumps(query, indent=3)
+        # import json
+        # print(json.dumps(query, indent=3))
 
         self.es.indices.refresh(index='tmdb')
-        result = self.es.search(index="tmdb", doc_type='movie', body=query)
-        if result["hits"]["total"] > 0:
+        result = self.es.search(index="tmdb", body=query)
+        if result["hits"]["total"]["value"] > 0:
             if result["hits"]["hits"][0]["_score"] >= self.MIN_SCORE_VALID:
                 return result["hits"]["hits"][0], result["hits"]["hits"][0]["_score"]
             else:
@@ -223,9 +221,9 @@ class ElasticTMDB(object):
         query["query"]["bool"]["must"].append({"term": {"director_name":  self.msg["director"][0]}})
         query["query"]["bool"]["must"].append({"term": {"year":  self.msg["year"]}})
         self.es.indices.refresh(index='tmdb_search')
-        result = self.es.search(index="tmdb_search", doc_type='search', body=query)
+        result = self.es.search(index="tmdb_search", body=query)
 
-        if result["hits"]["total"] == 0:
+        if result["hits"]["total"]["value"] == 0:
             #Query TMDB for person
             self.request["include_adult"] = "false"
             self.request["page"] = 1
@@ -255,7 +253,7 @@ class ElasticTMDB(object):
                 body = {}
                 body["director_name"] = self.msg["director"][0]
                 body["year"] = self.msg["year"]
-                self.es.index(index='tmdb_search', doc_type='search', body=body)
+                self.es.index(index='tmdb_search', body=body)
 
             else:
                 self.logging.debug("Already searched for " + self.msg["director"][0] + " filmography for year " + str(self.msg["year"]))
@@ -270,10 +268,10 @@ class ElasticTMDB(object):
         query["query"]["term"] = {}
         query["query"]["term"]["movie_title"] = self.msg["title"]
         self.es.indices.refresh(index='tmdb_search')
-        result = self.es.search(index="tmdb_search", doc_type='search', body=query)
+        result = self.es.search(index="tmdb_search", body=query)
         #print json.dumps(result, indent=3)
         
-        if result["hits"]["total"] == 0:
+        if result["hits"]["total"]["value"] == 0:
             self.request["include_adult"] = "false"
             self.request["page"] = 1
             self.request["query"] = self.msg["title"]
@@ -298,14 +296,14 @@ class ElasticTMDB(object):
             #Save that movie title to avoid doing the same search again
             body = {}
             body["movie_title"] = self.msg["title"]
-            self.es.index(index='tmdb_search', doc_type='search', body=body)
+            self.es.index(index='tmdb_search', body=body)
 
         else:
             self.logging.debug("Already searched for movie " + self.msg["title"])
 
     def cache_movie(self, movie=None):
         #Search elastic to get current version stored
-        record = self.es.get(index='tmdb', doc_type='movie', id=movie["id"], ignore=404)
+        record = self.es.get(index='tmdb', id=movie["id"], ignore=404)
 
         #print json.dumps(record, indent=3)
         if record["found"] == True:
@@ -332,7 +330,7 @@ class ElasticTMDB(object):
             else:
                 record["language"] = "Unknown"
 
-            #if original language is self.LANGUAGES then use orginal title else stick with english version
+            #if original language is self.LANGUAGES then use original title else stick with english version
             record["alias"] = []
             if record["language"] in self.LANGUAGES:
                 record["title"] = movie["original_title"]
@@ -439,10 +437,10 @@ class ElasticTMDB(object):
         
         record["version"] = self.LATEST_VERSION
         #record["last_updated"] = datetime.datetime.now().isoformat()
-        self.es.index(index='tmdb', doc_type='movie', id=movie["id"], body=record)
+        self.es.index(index='tmdb', id=movie["id"], body=record)
 
     def check_for_dup(self, title, alias, orgTitle):
-        if not alias:
+        if alias:
             for altTitle in alias:
                 if re.search("^" + title + "$", altTitle, flags=re.IGNORECASE):
                     return False
