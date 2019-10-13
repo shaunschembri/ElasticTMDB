@@ -1,13 +1,13 @@
-# -*- coding: utf-8 -*-
+#!/usr/bin/env python3
 import argparse
 import logging
 import json
 import os
 import io
 import re
-import sys
 import configparser
 import xml.etree.ElementTree as et
+import traceback
 from datetime import datetime, timedelta
 import time
 import elastictmdb
@@ -16,36 +16,36 @@ import preprocess
 class xmltv(object):
     def __init__(self):
         self.logging = logging.getLogger()
-        
-        #Initialise ElasticTMDB
+
+        # Initialise ElasticTMDB
         self.ElasticTMDB = elastictmdb.ElasticTMDB()
-        
-        #Initialise output XMLTV object
+
+        # Initialise output XMLTV object
         self.output = et.Element("tv")
 
-        #Read config
+        # Read config
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "elastictmdb.conf"))
         self.enablePreprocessing = config.getboolean("process_xmltv", "enable_preprocess_function")
         self.mainLanguage = config.get("main", "main_language")
         self.exceptionLanguage = config.get("main", "exception_language")
 
-        #Programme Categories as specified by the DVB EIT Standard under which movies and tvshows are listed
-        self.categoryMovie = ["Movie / Drama",\
-                              "Detective / Thriller",\
-                              "Adventure / Western / War",\
-                              "Science fiction / Fantasy / Horror",\
-                              "Comedy",\
-                              "Soap / Melodrama / Folkloric",\
-                              "Romance",\
-                              "Serious / Classical / Religious / Historical movie / Drama",\
+        # Programme Categories as specified by the DVB EIT Standard under which movies and tvshows are listed
+        self.categoryMovie = ["Movie / Drama",
+                              "Detective / Thriller",
+                              "Adventure / Western / War",
+                              "Science fiction / Fantasy / Horror",
+                              "Comedy",
+                              "Soap / Melodrama / Folkloric",
+                              "Romance",
+                              "Serious / Classical / Religious / Historical movie / Drama",
                               "Adult movie / Drama"]
 
-        #Load list of mapping to map catagories in XMLTV files to DVB EIT Standard list
+        # Load list of mapping to map catagories in XMLTV files to DVB EIT Standard list
         with open(os.path.join(os.path.dirname(__file__), "epg_category.json"), mode="r") as jsonfile:
             self.epgCategory = json.load(jsonfile, encoding="utf-8")
 
-        #Store last channel definition position. This is used so that all channel elemnets are at the top of the file as required by the XMLTV standard
+        # Store last channel definition position. This is used so that all channel elemnets are at the top of the file as required by the XMLTV standard
         self.channelPos = 0
 
     def process_file(self, filename):
@@ -54,14 +54,14 @@ class xmltv(object):
         self.logging.info("Parsing events")
 
         for item in xmlTree:
-            try:                
+            try:
                 if item.tag == 'channel':
-                    #Remove icons
+                    # Remove icons
                     icons = item.findall('icon')
                     for icon in icons:
                         item.remove(icon)
 
-                    #Remove URL
+                    # Remove URL
                     urls = item.findall('url')
                     for url in urls:
                         item.remove(url)
@@ -74,13 +74,13 @@ class xmltv(object):
                         item = preprocess.preprocess(item)
                     self.output.append(item)
 
-                    #Determine Category
+                    # Determine Category
                     isSeries = False
                     itemContentType = None
                     categories = item.findall('category')
                     for category in categories:
                         categoryName = category.text.lower()
-                        #Add category if it does not exists and tries to automap movie categories
+                        # Add category if it does not exists and tries to automap movie categories
                         if categoryName not in self.epgCategory:
                             if re.search("film|movie|cinema|drama|thriller", categoryName, re.IGNORECASE):
                                 self.logging.info("Adding category - %s and mapping it to Movie / Drama" % (categoryName))
@@ -89,47 +89,41 @@ class xmltv(object):
                                 self.logging.info("Adding category - %s" % (categoryName))
                                 self.epgCategory[categoryName] = None
 
-                        if self.epgCategory[categoryName] != None:
+                        if self.epgCategory[categoryName]:
                             if not itemContentType:
                                 itemContentType = self.epgCategory[categoryName]
                         if re.search("serie|téléfilm", categoryName, re.IGNORECASE):
                             isSeries = True
 
                         item.remove(category)
-                    if itemContentType != None:
+                    if itemContentType:
                         category = et.SubElement(item, 'category', lang="en")
                         category.text = itemContentType
 
-                    #Remove rating as we will use the ones we have obtained from TMDB
+                    # Remove rating as we will use the ones we have obtained from TMDB
                     ratings = item.findall('rating')
                     for rating in ratings:
                         item.remove(rating)
 
-                    #Remove rating as we will use the ones we have obtained from TMDB
+                    # Remove rating as we will use the ones we have obtained from TMDB
                     starratings = item.findall('star-rating')
                     for starrating in starratings:
                         item.remove(starrating)
 
-                    #Perform extra checks to determine if programme is actually a Movie
-                    if itemContentType != None or not isSeries:
+                    # Perform extra checks to determine if programme is actually a Movie
+                    if itemContentType or not isSeries:
                         if itemContentType in self.categoryMovie:
                             if not item.findall("episode-num"):
-                                #Check if length is 70min (4200sec) pr more to be considered a movie, else consider it a TV show
+                                # Check if length is 70min (4200sec) pr more to be considered a movie, else consider it a TV show
                                 start = item.attrib["start"]
                                 stop = item.attrib["stop"]
                                 if self.get_unixtime_from_ts(stop) - self.get_unixtime_from_ts(start) >= 4200:
                                     item = self.process_movie(item)
-            
-            except Exception as e:
-                exc_type, exc_obj, tb = sys.exc_info()
-                f = tb.tb_frame
-                lineno = tb.tb_lineno
-                filename = f.f_code.co_filename
-                template = "Exception: {0}. in file {1} line {2}\nArguments:{3!r}\n"
-                message = template.format(type(e).__name__, filename, lineno, e.args)
-                logging.error(message)
 
-        #Save epg category
+            except Exception:
+                logging.error(traceback.format_exc())
+
+        # Save epg category
         with io.open(os.path.join(os.path.dirname(__file__), "epg_category.json"), 'w', encoding="utf-8") as jsonfile:
             jsonfile.write(json.dumps(self.epgCategory, ensure_ascii=False, indent=3, sort_keys=True))
 
@@ -138,17 +132,17 @@ class xmltv(object):
         msg = {}
         msg["title"] = itemTitle.text
 
-        #Date
+        # Date
         year = item.find('date')
-        if year != None:
+        if year:
             msg["year"] = int(year.text)
 
-        #Comment this to always force update from TMDB (use only for testing)
-        #msg["force"] = True
+        # Comment this to always force update from TMDB (use only for testing)
+        # msg["force"] = True
 
-        #Director and cast
+        # Director and cast
         persons = item.find("credits")
-        if persons != None:
+        if persons:
             for director in persons.findall("director"):
                 if "director" not in msg:
                     msg["director"] = []
@@ -160,14 +154,14 @@ class xmltv(object):
 
         tmdbResult = self.ElasticTMDB.search_movie(msg)
         if tmdbResult:
-            #Remove all titles, so to create a new one with the title found
+            # Remove all titles, so to create a new one with the title found
             titles = item.findall('title')
             for title in titles:
                 item.remove(title)
 
-            #Set title
+            # Set title
             title = et.Element('title')
-            #Try to decode title as unicode, if it fails use it undecoded
+            # Try to decode title as unicode, if it fails use it undecoded
             try:
                 title.text = tmdbResult["_source"]["title"]
             except Exception:
@@ -175,7 +169,7 @@ class xmltv(object):
             title.set("lang", tmdbResult["_source"]["language"])
             item.insert(0, title)
 
-            #Set Subtitle
+            # Set Subtitle
             subtitle = item.find('sub-title')
             if subtitle is None:
                 subtitle = et.SubElement(item, 'sub-title')
@@ -187,14 +181,14 @@ class xmltv(object):
 
             subtitle.set("lang", self.mainLanguage)
 
-            #Set Image
+            # Set Image
             if tmdbResult["_source"]["image"]:
                 icon = item.find('icon')
                 if icon is None:
                     icon = et.SubElement(item, 'icon')
                 icon.set("src", tmdbResult["_source"]["image"])
 
-            #Set description
+            # Set description
             desc = item.find('desc')
             if desc is None:
                 desc = et.SubElement(item, 'desc')
@@ -204,12 +198,12 @@ class xmltv(object):
             else:
                 desc.set("lang", self.mainLanguage)
 
-            #Set date
+            # Set date
             if year is None:
                 year = et.SubElement(item, 'year')
             year.text = str(tmdbResult["_source"]["year"])
 
-            #Set director and cast
+            # Set director and cast
             if persons is not None:
                 item.remove(persons)
             persons = et.SubElement(item, 'credits')
@@ -222,50 +216,50 @@ class xmltv(object):
                     cast = et.SubElement(persons, 'actor')
                     cast.text = person
 
-            #Set rating
+            # Set rating
             if "rating" in tmdbResult["_source"]:
                 rating = et.SubElement(item, 'star-rating')
                 value = et.SubElement(rating, 'value')
                 value.text = str(tmdbResult["_source"]["rating"]) + "/10"
-        
+
         return item
 
     def build_movie_description(self, tmdbResult):
-        if tmdbResult != None:
+        if tmdbResult:
             desc = []
             if 'cast' in tmdbResult["_source"]:
                 desc.append("Cast: " + ", ".join(tmdbResult["_source"]["cast"][:5]))
 
             if 'director' in tmdbResult["_source"]:
                 desc.append("Director: " + ", ".join(tmdbResult["_source"]["director"]))
-            
+
             if 'rating' in tmdbResult["_source"]:
                 desc.append("Rating: " + str(tmdbResult["_source"]["rating"]))
-            
+
             if 'description' in tmdbResult["_source"]:
-                desc.append("\n" + tmdbResult["_source"]["description"] +"\n")
+                desc.append("\n" + tmdbResult["_source"]["description"] + "\n")
 
             if 'year' in tmdbResult["_source"]:
                 desc.append("Year: " + str(tmdbResult["_source"]["year"]))
-            
+
             if 'genre' in tmdbResult["_source"]:
                 desc.append("Genre: " + ", ".join(tmdbResult["_source"]["genre"]))
-            
+
             if 'language' in tmdbResult["_source"]:
                 desc.append("Language: " + self.ElasticTMDB.get_language(tmdbResult["_source"]["language"]))
-            
+
             if 'country' in tmdbResult["_source"]:
                 desc.append("Country: " + ", ".join(tmdbResult["_source"]["country"]))
-            
+
             if 'popularity' in tmdbResult["_source"]:
                 desc.append("Popularity: " + str(round(tmdbResult["_source"]["popularity"], 1)))
 
             if '_score' in tmdbResult:
                 desc.append("Score: " + str(round(tmdbResult["_score"], 1)))
-            
+
             result = "\n".join(desc)
-            #Remove this character which crashes importing in enigma2 devices
-            result = re.sub('','', result)
+            # Remove this character which crashes importing in enigma2 devices
+            result = re.sub('', '', result)
             return result
 
     def get_unixtime_from_ts(self, t):
@@ -277,13 +271,13 @@ class xmltv(object):
         return int(time.mktime(ret.timetuple()))
 
     def save_file(self, filename):
-        #Saving final xmltv file
+        # Saving final xmltv file
         self.logging.info("Saving to " + filename)
         with open(os.path.join(filename), 'wb') as xmlFile:
             xmlFile.write(et.tostring(self.output, encoding="UTF-8"))
 
 if __name__ == "__main__":
-    #Parse command line arguments
+    # Parse command line arguments
     argParser = argparse.ArgumentParser()
     argParser._action_groups.pop()
     required = argParser.add_argument_group('required arguments')
@@ -299,9 +293,9 @@ if __name__ == "__main__":
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 
     XMLTV = xmltv()
-    #Process input files
+    # Process input files
     for filename in args.input:
         XMLTV.process_file(filename)
-    #Save file
+    # Save file
     XMLTV.save_file(args.output)
     logging.info("Done")
