@@ -429,9 +429,9 @@ class ElasticTMDB(object):
     def check_for_dup(self, title, alias, orgTitle):
         if alias:
             for altTitle in alias:
-                if re.search("^" + title + "$", altTitle, flags=re.IGNORECASE):
+                if re.search("^{}$" + re.escape(title), altTitle, flags=re.IGNORECASE):
                     return False
-        if re.search("^" + title + "$", orgTitle, flags=re.IGNORECASE):
+        if re.search("^{}$" + re.escape(title), orgTitle, flags=re.IGNORECASE):
             return False
         return True
 
