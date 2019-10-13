@@ -227,8 +227,8 @@ class ElasticTMDB(object):
                 if response["total_results"] > 0:
                     for person in response["results"][:1]:
                         # Search for filmography of director
-                        self.logging.info("Getting filmography for " + person["name"] + " (" + str(self.msg["year"]) + ")")
-                        credits = self.send_request_get("person/" + str(person["id"]) + "/credits")
+                        self.logging.info("Getting filmography for {} ({})".format(person["name"], self.msg["year"]))
+                        credits = self.send_request_get("person/{}/movie_credits".format(person["id"]))
                         # Find movies directed during years of movie being searched
                         if "crew" in credits:
                             for credit in credits["crew"]:
@@ -237,7 +237,7 @@ class ElasticTMDB(object):
                                         if credit["release_date"] != '' and credit["release_date"]:
                                             year = int(credit["release_date"][:4])
                                             if abs(self.msg["year"] - year) <= self.YEAR_DIFF:
-                                                movie = self.send_request_get("movie/" + str(credit["id"]))
+                                                movie = self.send_request_get("movie/{}".format(credit["id"]))
                                                 if "id" in movie:
                                                     self.cache_movie(movie)
 
