@@ -106,7 +106,7 @@ class ElasticTMDB(object):
         # Lookup movie in elastic
         result = self.query_for_movie()
         # If score is less then MIN_SCORE_NO_SEARCH perform a search
-        if result[1] < self.MIN_SCORE_NO_SEARCH:
+        if result[1] < self.MIN_SCORE_NO_SEARCH or self.msg["force"]:
             # Search by director/year if both are avaliable else search by title
             searchByDirector = False
             if "director" in self.msg and "year" in self.msg:
@@ -135,7 +135,7 @@ class ElasticTMDB(object):
 
         if result[0]:
             # If version of movie is not the latest force an update
-            if result[0]["_source"]["version"] < self.LATEST_VERSION or self.msg["force"]:
+            if result[0]["_source"]["version"] < self.LATEST_VERSION:
                 movie = self.send_request_get("movie/{}".format(result[0]["_id"]))
                 if movie:
                     if "id" in movie:
