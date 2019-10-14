@@ -14,12 +14,15 @@ import elastictmdb
 import preprocess
 
 class xmltv(object):
-    def __init__(self):
+    def __init__(self, force=False):
         # Initialise ElasticTMDB
         self.ElasticTMDB = elastictmdb.ElasticTMDB()
 
         # Initialise output XMLTV object
         self.output = et.Element("tv")
+
+        # Set force flag
+        self.force = force
 
         # Read config
         config = configparser.ConfigParser()
@@ -129,14 +132,12 @@ class xmltv(object):
         itemTitle = item.findall('title')[0]
         msg = {}
         msg["title"] = itemTitle.text
+        msg["force"] = self.force
 
         # Date
         year = item.find('date')
         if year:
             msg["year"] = int(year.text)
-
-        # Comment this to always force update from TMDB (use only for testing)
-        # msg["force"] = True
 
         # Director and cast
         persons = item.find("credits")
@@ -283,6 +284,7 @@ if __name__ == "__main__":
     required.add_argument("-i", "--input", type=str, action='append', help="Input XMLTV file")
     required.add_argument("-o", "--output", type=str, help="Output XMLTV file")
     optional.add_argument("-l", "--logfile", type=str, help="Output log to file")
+    optional.add_argument("-f", "--force", action="store_true", help="Force search for all movies")
     args = argParser.parse_args()
 
     if args.logfile:
@@ -290,7 +292,7 @@ if __name__ == "__main__":
     else:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 
-    XMLTV = xmltv()
+    XMLTV = xmltv(force=args.force)
     # Process input files
     for filename in args.input:
         XMLTV.process_file(filename)
