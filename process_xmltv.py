@@ -129,19 +129,19 @@ class xmltv(object):
             jsonfile.write(json.dumps(self.epgCategory, ensure_ascii=False, indent=3, sort_keys=True))
 
     def process_movie(self, item):
-        itemTitle = item.findall('title')[0]
+        itemTitle = item.findall("title")[0]
         msg = {}
         msg["title"] = itemTitle.text
         msg["force"] = self.force
 
         # Date
-        year = item.find('date')
-        if year:
+        year = item.find("date")
+        if year is not None:
             msg["year"] = int(year.text)
 
         # Director and cast
         persons = item.find("credits")
-        if persons:
+        if persons is not None:
             for director in persons.findall("director"):
                 if "director" not in msg:
                     msg["director"] = []
