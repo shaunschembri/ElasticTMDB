@@ -8,7 +8,6 @@ import re
 
 class ElasticTMDB(object):
     def __init__(self):
-        self.logging = logging.getLogger()
         config = configparser.ConfigParser()
         config.read(os.path.join(os.path.dirname(__file__), "elastictmdb.conf"))
 
@@ -65,7 +64,7 @@ class ElasticTMDB(object):
             mappingFile.close()
             response = self.es.indices.create(index='tmdb', body=indexSettings)
             if response["acknowledged"]:
-                self.logging.info("Created tmdb index")
+                logging.info("Created tmdb index")
 
         if not self.es.indices.exists(index="tmdb_search"):
             mappingFile = open(os.path.join(os.path.dirname(__file__), "mapping", "tmdb_search.json"), "r")
@@ -73,24 +72,24 @@ class ElasticTMDB(object):
             mappingFile.close()
             response = self.es.indices.create(index='tmdb_search', body=indexSettings)
             if response["acknowledged"]:
-                self.logging.info("Created tmdb_search index")
+                logging.info("Created tmdb_search index")
 
     def send_request_get(self, endPoint=None):
         if "language" not in self.request:
             self.request["language"] = self.MAIN_LANGUAGE
         if endPoint:
-            response = requests.get("https://api.themoviedb.org/3/" + endPoint, params=self.request)
+            response = requests.get("https://api.themoviedb.org/3/{}".format(endPoint), params=self.request)
             if response:
                 if response.status_code < 400:
                     self.request = self.defaultRequest  # Reset request
                     return json.loads(response.content)
                 else:
-                    self.logging.error("Error Code " + str(response.status_code))
-                    self.logging.error(response.content)
+                    logging.error("Error Code {}".format(response.status_code))
+                    logging.error(response.content)
                     return None
             else:
-                self.logging.error("Error Code " + str(response.status_code))
-                self.logging.error(response.content)
+                logging.error("Error Code {}".format(response.status_code))
+                logging.error(response.content)
                 return None
 
     def get_backgrounds_baseurl(self):
@@ -125,9 +124,9 @@ class ElasticTMDB(object):
                     result = self.query_for_movie()
         else:
             if result[0]:
-                self.logging.debug("Found " + result[0]["_source"]["title"] + " without quering TMDB - Score " + str(result[1]))
+                logging.debug("Found {} without quering TMDB - Score {}".format(result[0]["_source"]["title"], result[1]))
             else:
-                self.logging.debug("No results found " + str(result[1]))
+                logging.debug("No results found {}".format(result[1]))
 
         if result[1] < self.MIN_SCORE_NO_SEARCH and "year" in self.msg:
             result = self.query_for_movie(yearDiff=1)
@@ -137,21 +136,22 @@ class ElasticTMDB(object):
         if result[0]:
             # If version of movie is not the latest force an update
             if result[0]["_source"]["version"] < self.LATEST_VERSION or self.msg["force"]:
-                movie = self.send_request_get("movie/" + str(result[0]["_id"]))
-                if "id" in movie:
-                    self.cache_movie(movie)
-                    # Fetch again updated result from DB and save score from search done before
-                    score = result[0]["_score"]
-                    result = self.es.get(index='tmdb', id=result[0]["_id"], ignore=404)
-                    result["_score"] = score
-                    result["_source"]["image"] = self.IMAGE_BASE_URL + result["_source"]["image"]
-                    return result
+                movie = self.send_request_get("movie/{}".format(result[0]["_id"]))
+                if movie:
+                    if "id" in movie:
+                        self.cache_movie(movie)
+                        # Fetch again updated result from DB and save score from search done before
+                        score = result[0]["_score"]
+                        result = self.es.get(index='tmdb', id=result[0]["_id"], ignore=404)
+                        result["_score"] = score
+                        result["_source"]["image"] = "{}{}".format(self.IMAGE_BASE_URL, result["_source"]["image"])
+                        return result
                 else:
-                    self.logging.info("Deleting " + result[0]["_source"]["title"] + " as its not found on TMDB")
+                    logging.info("Deleting {} as its not found on TMDB".format(result[0]["_source"]["title"]))
                     self.es.delete(index='tmdb', id=result[0]["_id"])
-                    return result[0]
+                    return None
             else:
-                result[0]["_source"]["image"] = self.IMAGE_BASE_URL + result[0]["_source"]["image"]
+                result[0]["_source"]["image"] = "{}{}".format(self.IMAGE_BASE_URL, result[0]["_source"]["image"])
                 return result[0]
         else:
             return None
@@ -200,7 +200,7 @@ class ElasticTMDB(object):
             return None, 0
 
     def get_movie_from_tmdb(self, tmdbId=None):
-        return self.send_request_get("movie/" + str(tmdbId))
+        return self.send_request_get("movie/{}".format(tmdbId))
 
     def search_movie_by_director(self, msg=None):
         if msg:
@@ -227,7 +227,7 @@ class ElasticTMDB(object):
                 if response["total_results"] > 0:
                     for person in response["results"][:1]:
                         # Search for filmography of director
-                        self.logging.info("Getting filmography for {} ({})".format(person["name"], self.msg["year"]))
+                        logging.info("Getting filmography for {} ({})".format(person["name"], self.msg["year"]))
                         credits = self.send_request_get("person/{}/movie_credits".format(person["id"]))
                         # Find movies directed during years of movie being searched
                         if "crew" in credits:
@@ -248,7 +248,7 @@ class ElasticTMDB(object):
                 self.es.index(index='tmdb_search', body=body)
 
             else:
-                self.logging.debug("Already searched for " + self.msg["director"][0] + " filmography for year " + str(self.msg["year"]))
+                logging.debug("Already searched for {} filmography for year {}".format(self.msg["director"][0], self.msg["year"]))
 
     def search_movie_tmdb_by_name(self, msg=None):
         if msg:
@@ -267,7 +267,7 @@ class ElasticTMDB(object):
             self.request["page"] = 1
             self.request["query"] = self.msg["title"]
 
-            self.logging.info("Searching for " + self.msg["title"])
+            logging.info("Searching for {}".format(self.msg["title"]))
             response = self.send_request_get("search/movie")
             # print json.dumps(response, indent=3)
             if "total_results" in response:
@@ -290,7 +290,7 @@ class ElasticTMDB(object):
             self.es.index(index='tmdb_search', body=body)
 
         else:
-            self.logging.debug("Already searched for movie " + self.msg["title"])
+            logging.debug("Already searched for movie {}".format(self.msg["title"]))
 
     def cache_movie(self, movie=None):
         # Search elastic to get current version stored
@@ -335,10 +335,10 @@ class ElasticTMDB(object):
             if movie["release_date"] != "":
                 record["year"] = int(movie["release_date"][:4])
 
-            self.logging.info("Getting details for " + record["title"] + " (" + str(record["year"]) + ")")
+            logging.info("Getting details for {} ({})".format(record["title"], record["year"]))
 
             # Get cast and director
-            cast = self.send_request_get("movie/" + str(movie["id"]) + "/credits")
+            cast = self.send_request_get("movie/{}/credits".format(movie["id"]))
             for person in cast["cast"]:
                 if person["order"] < 10:
                     if "cast" not in record:
@@ -353,7 +353,7 @@ class ElasticTMDB(object):
             # Get titles in different languages
             for language in self.LANGUAGES:
                 self.request["language"] = language
-                alias = self.send_request_get("movie/" + str(movie["id"]))
+                alias = self.send_request_get("movie/{}".format(movie["id"]))
 
                 if language == "en":
                     # Get production country
@@ -386,7 +386,7 @@ class ElasticTMDB(object):
                     record["alias"].append(alias["title"])
 
             # Get alternative titles
-            altTitles = self.send_request_get("movie/" + str(movie["id"]) + "/alternative_titles")
+            altTitles = self.send_request_get("movie/{}/alternative_titles".format(movie["id"]))
             for title in altTitles["titles"]:
                 if title["iso_3166_1"] in self.COUNTRIES:
                     if self.check_for_dup(title["title"], record["alias"], record["title"]):
@@ -394,7 +394,7 @@ class ElasticTMDB(object):
 
             # Get other release dates
             record["year_other"] = []
-            releaseDates = self.send_request_get("movie/" + str(movie["id"]) + "/release_dates")
+            releaseDates = self.send_request_get("movie/{}/release_dates".format(movie["id"]))
             for countryDate in releaseDates["results"]:
                 if countryDate["iso_3166_1"] in self.COUNTRIES:
                     for releaseDate in countryDate["release_dates"]:
@@ -411,17 +411,17 @@ class ElasticTMDB(object):
             else:
                 self.request["language"] = "en"
 
-            images = self.send_request_get("movie/" + str(movie["id"]) + "/images")
+            images = self.send_request_get("movie/{}/images".format(movie["id"]))
             imageAspectRatio = 0
             for image in images["posters"] + images["backdrops"]:
                 if abs(image["aspect_ratio"] - self.IMAGE_ASPECT_RATIO) < abs(imageAspectRatio - self.IMAGE_ASPECT_RATIO):
                     record["image"] = image["file_path"]
                     imageAspectRatio = image["aspect_ratio"]
             if record["image"] != "":
-                self.logging.debug("Storing image with AR " + str(round(imageAspectRatio, 2)))
+                logging.debug("Storing image with AR {}".format(round(imageAspectRatio, 2)))
 
         else:
-            self.logging.debug("No update required for " + movie["title"])
+            logging.debug("No update required for {}".format(movie["title"]))
 
         record["version"] = self.LATEST_VERSION
         self.es.index(index='tmdb', id=movie["id"], body=record)

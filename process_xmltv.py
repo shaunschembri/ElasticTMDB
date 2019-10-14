@@ -15,8 +15,6 @@ import preprocess
 
 class xmltv(object):
     def __init__(self):
-        self.logging = logging.getLogger()
-
         # Initialise ElasticTMDB
         self.ElasticTMDB = elastictmdb.ElasticTMDB()
 
@@ -49,9 +47,9 @@ class xmltv(object):
         self.channelPos = 0
 
     def process_file(self, filename):
-        self.logging.info("Parsing " + filename)
+        logging.info("Parsing {}".format(filename))
         xmlTree = et.parse(filename).getroot()
-        self.logging.info("Parsing events")
+        logging.info("Parsing events")
 
         for item in xmlTree:
             try:
@@ -83,10 +81,10 @@ class xmltv(object):
                         # Add category if it does not exists and tries to automap movie categories
                         if categoryName not in self.epgCategory:
                             if re.search("film|movie|cinema|drama|thriller", categoryName, re.IGNORECASE):
-                                self.logging.info("Adding category - %s and mapping it to Movie / Drama" % (categoryName))
+                                logging.info("Adding category - {} and mapping it to Movie / Drama".format(categoryName))
                                 self.epgCategory[categoryName] = "Movie / Drama"
                             else:
-                                self.logging.info("Adding category - %s" % (categoryName))
+                                logging.info("Adding category - {}".format(categoryName))
                                 self.epgCategory[categoryName] = None
 
                         if self.epgCategory[categoryName]:
@@ -175,7 +173,7 @@ class xmltv(object):
                 subtitle = et.SubElement(item, 'sub-title')
 
             if tmdbResult["_source"]["genre"]:
-                subtitle.text = str(tmdbResult["_source"]["year"]) + " - " + ", ".join(tmdbResult["_source"]["genre"])
+                subtitle.text = "{} - {}".format(tmdbResult["_source"]["year"], ", ".join(tmdbResult["_source"]["genre"]))
             else:
                 subtitle.text = str(tmdbResult["_source"]["year"])
 
@@ -220,7 +218,7 @@ class xmltv(object):
             if "rating" in tmdbResult["_source"]:
                 rating = et.SubElement(item, 'star-rating')
                 value = et.SubElement(rating, 'value')
-                value.text = str(tmdbResult["_source"]["rating"]) + "/10"
+                value.text = "{}/10".format(str(tmdbResult["_source"]["rating"]))
 
         return item
 
@@ -228,34 +226,34 @@ class xmltv(object):
         if tmdbResult:
             desc = []
             if 'cast' in tmdbResult["_source"]:
-                desc.append("Cast: " + ", ".join(tmdbResult["_source"]["cast"][:5]))
+                desc.append("Cast: {}".format(", ".join(tmdbResult["_source"]["cast"][:5])))
 
             if 'director' in tmdbResult["_source"]:
-                desc.append("Director: " + ", ".join(tmdbResult["_source"]["director"]))
+                desc.append("Director: {}".format(", ".join(tmdbResult["_source"]["director"])))
 
             if 'rating' in tmdbResult["_source"]:
-                desc.append("Rating: " + str(tmdbResult["_source"]["rating"]))
+                desc.append("Rating: {}".format(tmdbResult["_source"]["rating"]))
 
             if 'description' in tmdbResult["_source"]:
-                desc.append("\n" + tmdbResult["_source"]["description"] + "\n")
+                desc.append("\n{}\n".format(tmdbResult["_source"]["description"]))
 
             if 'year' in tmdbResult["_source"]:
-                desc.append("Year: " + str(tmdbResult["_source"]["year"]))
+                desc.append("Year: {}".format(tmdbResult["_source"]["year"]))
 
             if 'genre' in tmdbResult["_source"]:
-                desc.append("Genre: " + ", ".join(tmdbResult["_source"]["genre"]))
+                desc.append("Genre: {}".format(", ".join(tmdbResult["_source"]["genre"])))
 
             if 'language' in tmdbResult["_source"]:
-                desc.append("Language: " + self.ElasticTMDB.get_language(tmdbResult["_source"]["language"]))
+                desc.append("Language: {}".format(self.ElasticTMDB.get_language(tmdbResult["_source"]["language"])))
 
             if 'country' in tmdbResult["_source"]:
-                desc.append("Country: " + ", ".join(tmdbResult["_source"]["country"]))
+                desc.append("Country: {}".format(", ".join(tmdbResult["_source"]["country"])))
 
             if 'popularity' in tmdbResult["_source"]:
-                desc.append("Popularity: " + str(round(tmdbResult["_source"]["popularity"], 1)))
+                desc.append("Popularity: {:.1f}".format(tmdbResult["_source"]["popularity"]))
 
             if '_score' in tmdbResult:
-                desc.append("Score: " + str(round(tmdbResult["_score"], 1)))
+                desc.append("Score: {:.1f}".format(tmdbResult["_score"]))
 
             result = "\n".join(desc)
             # Remove this character which crashes importing in enigma2 devices
@@ -272,7 +270,7 @@ class xmltv(object):
 
     def save_file(self, filename):
         # Saving final xmltv file
-        self.logging.info("Saving to " + filename)
+        logging.info("Saving to {}".format(filename))
         with open(os.path.join(filename), 'wb') as xmlFile:
             xmlFile.write(et.tostring(self.output, encoding="UTF-8"))
 
