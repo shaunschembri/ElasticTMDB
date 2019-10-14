@@ -39,31 +39,34 @@ def build_movie_description(tmdbResult):
     if tmdbResult:
         desc = []
         if 'cast' in tmdbResult["_source"]:
-            desc.append("Cast: " + ", ".join(tmdbResult["_source"]["cast"][:5]))
+            desc.append("Cast: {}".format(", ".join(tmdbResult["_source"]["cast"][:5])))
 
         if 'director' in tmdbResult["_source"]:
-            desc.append("Director: " + ", ".join(tmdbResult["_source"]["director"]))
+            desc.append("Director: {}".format(", ".join(tmdbResult["_source"]["director"])))
 
         if 'rating' in tmdbResult["_source"]:
-            desc.append("Rating: " + str(tmdbResult["_source"]["rating"]))
+            desc.append("Rating: {}".format(tmdbResult["_source"]["rating"]))
 
         if 'description' in tmdbResult["_source"]:
-            desc.append("\n" + tmdbResult["_source"]["description"] + "\n")
+            desc.append("\n{}\n".format(tmdbResult["_source"]["description"]))
 
         if 'year' in tmdbResult["_source"]:
-            desc.append("Year: " + str(tmdbResult["_source"]["year"]))
+            desc.append("Year: {}".format(tmdbResult["_source"]["year"]))
 
         if 'genre' in tmdbResult["_source"]:
-            desc.append("Genre: " + ", ".join(tmdbResult["_source"]["genre"]))
+            desc.append("Genre: {}".format(", ".join(tmdbResult["_source"]["genre"])))
+
+        if 'language' in tmdbResult["_source"]:
+            desc.append("Language: {}".format(ElasticTMDB.get_language(tmdbResult["_source"]["language"])))
 
         if 'country' in tmdbResult["_source"]:
-            desc.append("Country: " + ", ".join(tmdbResult["_source"]["country"]))
+            desc.append("Country: {}".format(", ".join(tmdbResult["_source"]["country"])))
 
         if 'popularity' in tmdbResult["_source"]:
-            desc.append("Popularity: " + str(round(tmdbResult["_source"]["popularity"], 1)))
+            desc.append("Popularity: {:.1f}".format(tmdbResult["_source"]["popularity"]))
 
         if '_score' in tmdbResult:
-            desc.append("Score: " + str(round(tmdbResult["_score"], 1)))
+            desc.append("Score: {:.1f}".format(tmdbResult["_score"]))
 
         return "\n".join(desc)
 
