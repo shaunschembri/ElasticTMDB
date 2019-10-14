@@ -275,7 +275,7 @@ class ElasticTMDB(object):
                     for index, movie in enumerate(response["results"]):
                         # If year is avaliable match only movies around the year provided else cache top 3 movies returned
                         if "year" in self.msg:
-                            if movie["release_date"] != '' and movie["release_date"]:
+                            if movie["release_date"] != '' and "release_date" in movie:
                                 year = int(movie["release_date"][:4])
                                 if abs(self.msg["year"] - year) <= self.YEAR_DIFF:
                                     if "id" in movie:
