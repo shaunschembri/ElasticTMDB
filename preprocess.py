@@ -4,7 +4,7 @@ def preprocess(item):
     titles = item.findall('title')
     itemTitle = None
     for title in titles:
-        if not itemTitle:
+        if itemTitle is None:
             itemTitle = title
         else:
             # Prioritise English or Original language titles

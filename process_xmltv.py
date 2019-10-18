@@ -90,14 +90,14 @@ class xmltv(object):
                                 logging.info("Adding category - {}".format(categoryName))
                                 self.epgCategory[categoryName] = None
 
-                        if self.epgCategory[categoryName]:
+                        if self.epgCategory[categoryName] is not None:
                             if not itemContentType:
                                 itemContentType = self.epgCategory[categoryName]
                         if re.search("serie|téléfilm", categoryName, re.IGNORECASE):
                             isSeries = True
 
                         item.remove(category)
-                    if itemContentType:
+                    if itemContentType is not None:
                         category = et.SubElement(item, 'category', lang="en")
                         category.text = itemContentType
 
@@ -112,7 +112,7 @@ class xmltv(object):
                         item.remove(starrating)
 
                     # Perform extra checks to determine if programme is actually a Movie
-                    if itemContentType or not isSeries:
+                    if itemContentType is not None or not isSeries:
                         if itemContentType in self.categoryMovie:
                             if not item.findall("episode-num"):
                                 # Check if length is 70min (4200sec) pr more to be considered a movie, else consider it a TV show
