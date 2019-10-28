@@ -114,12 +114,11 @@ class xmltv(object):
                     # Perform extra checks to determine if programme is actually a Movie
                     if itemContentType is not None or not isSeries:
                         if itemContentType in self.categoryMovie:
-                            if not item.findall("episode-num"):
-                                # Check if length is 70min (4200sec) pr more to be considered a movie, else consider it a TV show
-                                start = item.attrib["start"]
-                                stop = item.attrib["stop"]
-                                if self.get_unixtime_from_ts(stop) - self.get_unixtime_from_ts(start) >= 4200:
-                                    item = self.process_movie(item)
+                            # Check if length is 70min (4200sec) pr more to be considered a movie, else consider it a TV show
+                            start = item.attrib["start"]
+                            stop = item.attrib["stop"]
+                            if self.get_unixtime_from_ts(stop) - self.get_unixtime_from_ts(start) >= 4200:
+                                item = self.process_movie(item)
 
             except Exception:
                 logging.error(traceback.format_exc())
