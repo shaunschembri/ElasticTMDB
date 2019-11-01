@@ -96,7 +96,7 @@ Result
          "Stirb Langsam 1", 
          "Die Hard 1 Pi\u00e8ge de cristal"
       ], 
-      "version": 2, 
+      "last_updated": "2019-10-31T15:58:57.485537",
       "year": 1988, 
       "genre": [
          "Action", 
@@ -223,9 +223,6 @@ This project has been developed for my personal use and I consider it as feature
 * Dynamically increase min_score_valid and min_score_no_search parameters based on the number of movies already cached in ElasticSearch.
 * Allow for customisation of the description string returned by process_xmltv.py to be able to change order and allow for non-English static text.
 * Extend ElasticTMDB to cover also TV shows.
-* ~~Migrate to Python3 as Python2 will soon approch [EOL](https://pythonclock.org/).~~
-* Ability to increase the document version in Elasticsearch, so that movies can be updated after a language or country has been added to the configuration.
-* ~~Migrate to Elasticsearch 7.x and optimise index mappings.~~
 
 ## License
 
