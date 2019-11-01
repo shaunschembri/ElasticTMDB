@@ -308,10 +308,12 @@ class ElasticTMDB(object):
         record["alias"] = []
         if record["language"] in self.LANGUAGES:
             record["title"] = movie["original_title"]
-            record["alias"].append(movie["title"])
+            if movie["title"] != movie["original_title"]:
+                record["alias"].append(movie["title"])
         else:
             record["title"] = movie["title"]
-            record["alias"].append(movie["original_title"])
+            if movie["title"] != movie["original_title"]:
+                record["alias"].append(movie["original_title"])
 
         # Release year
         record["year"] = None
@@ -410,9 +412,9 @@ class ElasticTMDB(object):
     def check_for_dup(self, title, alias, orgTitle):
         if alias:
             for altTitle in alias:
-                if re.search("^{}$" + re.escape(title), altTitle, flags=re.IGNORECASE):
+                if re.search("^{}$".format(re.escape(title)), altTitle, flags=re.IGNORECASE):
                     return False
-        if re.search("^{}$" + re.escape(title), orgTitle, flags=re.IGNORECASE):
+        if re.search("^{}$".format(re.escape(title)), orgTitle, flags=re.IGNORECASE):
             return False
         return True
 
