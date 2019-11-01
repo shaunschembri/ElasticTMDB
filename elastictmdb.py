@@ -356,10 +356,10 @@ class ElasticTMDB(object):
                     record["genre"].append(genre["name"])
 
                 if movie["original_language"] != self.EXCEPTION_LANGUAGE:
-                    # Use English description for everything but Italian movies
+                    # Use English description for everything but self.EXCEPTION_LANGUAGE
                     record["description"] = alias["overview"]
 
-            # Keep original title and replace description with italian description if movie is in Italian
+            # Keep original title and replace description with self.EXCEPTION_LANGUAGE description if movie is in self.EXCEPTION_LANGUAGE language
             if movie["original_language"] == self.EXCEPTION_LANGUAGE and language == self.EXCEPTION_LANGUAGE:
                 record["alias"].append(record["title"])
                 record["title"] = alias["title"]
