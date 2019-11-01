@@ -111,10 +111,23 @@ class xmltv(object):
                     for starrating in starratings:
                         item.remove(starrating)
 
+                    # Check if programme has a year and director, if both are present programme might be a movie
+                    hasYear = False
+                    year = item.find("date")
+                    if year is not None:
+                        hasYear = True
+
+                    hasDirector = False
+                    persons = item.find("credits")
+                    if persons is not None:
+                        for director in persons.findall("director"):
+                            hasDirector = True
+                            break
+
                     # Perform extra checks to determine if programme is actually a Movie
                     if itemContentType is not None or not isSeries:
-                        if itemContentType in self.categoryMovie:
-                            # Check if length is 70min (4200sec) pr more to be considered a movie, else consider it a TV show
+                        if itemContentType in self.categoryMovie or (hasYear and hasDirector):
+                            # Check if length is 70min (4200sec) or more to be considered a movie, else consider it a TV show
                             start = item.attrib["start"]
                             stop = item.attrib["stop"]
                             if self.get_unixtime_from_ts(stop) - self.get_unixtime_from_ts(start) >= 4200:
