@@ -3,6 +3,7 @@ import logging
 import requests
 import configparser
 import elasticsearch
+import datetime
 import os
 import re
 
@@ -44,10 +45,8 @@ class ElasticTMDB(object):
         self.IMAGE_ASPECT_RATIO = config.getfloat("main", "image_aspect_ratio")
         self.MIN_SCORE_VALID = config.getint("main", "min_score_valid")
         self.MIN_SCORE_NO_SEARCH = config.getint("main", "min_score_no_search")
-
-        # Elasticsearch document version control
-        self.LATEST_VERSION = 2
-        self.MIN_VERSION_FOR_DIFF_UPDATE = 2
+        self.REFRESH_AFTER_DAYS = config.getint("main", "refresh_after_days")
+        self.REFRESH_IF_OLDER = datetime.datetime.strptime(config.get("main", "refresh_if_older"), "%Y-%m-%d")
 
         if not config.getboolean("main", "extra_logging"):
             logging.getLogger("elasticsearch").setLevel(logging.WARNING)
@@ -103,7 +102,7 @@ class ElasticTMDB(object):
         if "force" not in self.msg:
             self.msg["force"] = False
 
-        # Lookup movie in elastic
+        # Lookup movie in elasticsearch
         result = self.query_for_movie()
         # If score is less then MIN_SCORE_NO_SEARCH perform a search
         if result[1] < self.MIN_SCORE_NO_SEARCH or self.msg["force"]:
@@ -134,8 +133,13 @@ class ElasticTMDB(object):
                 result = self.query_for_movie(yearDiff=2)
 
         if result[0]:
-            # If version of movie is not the latest force an update
-            if result[0]["_source"]["version"] < self.LATEST_VERSION:
+            # Get time records has been updated.  If timestamp is missing assign it self.REFRESH_IF_OLDER so it forces an update
+            if "last_updated" in result[0]["_source"]:
+                lastUpdated = datetime.datetime.strptime(result[0]["_source"]["last_updated"], "%Y-%m-%dT%H:%M:%S.%f")
+            else:
+                lastUpdated = self.REFRESH_IF_OLDER
+                
+            if lastUpdated < datetime.datetime.utcnow() - datetime.timedelta(days=self.REFRESH_AFTER_DAYS) or lastUpdated <= self.REFRESH_IF_OLDER:
                 movie = self.send_request_get("movie/{}".format(result[0]["_id"]))
                 if movie:
                     if "id" in movie:
@@ -186,10 +190,6 @@ class ElasticTMDB(object):
             year["bool"]["should"].append({"match": {"year_other": self.msg["year"]}})
             query["query"]["bool"]["must"].append(year)
 
-        # import json
-        # print(json.dumps(query, indent=3))
-
-        self.es.indices.refresh(index='tmdb')
         result = self.es.search(index="tmdb", body=query)
         if result["hits"]["total"]["value"] > 0:
             if result["hits"]["hits"][0]["_score"] >= self.MIN_SCORE_VALID:
@@ -213,7 +213,6 @@ class ElasticTMDB(object):
         query["query"]["bool"]["must"] = []
         query["query"]["bool"]["must"].append({"term": {"director_name": self.msg["director"][0]}})
         query["query"]["bool"]["must"].append({"term": {"year": self.msg["year"]}})
-        self.es.indices.refresh(index='tmdb_search')
         result = self.es.search(index="tmdb_search", body=query)
 
         if result["hits"]["total"]["value"] == 0:
@@ -245,7 +244,7 @@ class ElasticTMDB(object):
                 body = {}
                 body["director_name"] = self.msg["director"][0]
                 body["year"] = self.msg["year"]
-                self.es.index(index='tmdb_search', body=body)
+                self.es.index(index='tmdb_search', body=body, params={"refresh": "true"})
 
             else:
                 logging.debug("Already searched for {} filmography for year {}".format(self.msg["director"][0], self.msg["year"]))
@@ -259,7 +258,6 @@ class ElasticTMDB(object):
         query["query"] = {}
         query["query"]["term"] = {}
         query["query"]["term"]["movie_title"] = self.msg["title"]
-        self.es.indices.refresh(index='tmdb_search')
         result = self.es.search(index="tmdb_search", body=query)
 
         if result["hits"]["total"]["value"] == 0:
@@ -287,144 +285,127 @@ class ElasticTMDB(object):
             # Save that movie title to avoid doing the same search again
             body = {}
             body["movie_title"] = self.msg["title"]
-            self.es.index(index='tmdb_search', body=body)
+            self.es.index(index='tmdb_search', body=body, params={"refresh": "true"})
 
         else:
             logging.debug("Already searched for movie {}".format(self.msg["title"]))
 
-    def cache_movie(self, movie=None):
-        # Search elastic to get current version stored
-        record = self.es.get(index='tmdb', id=movie["id"], ignore=404)
-
-        if record["found"]:
-            record = record["_source"]
-            if record["version"] < self.MIN_VERSION_FOR_DIFF_UPDATE or self.msg["force"]:
-                # Create a new record to overwrite record in database
-                record = {}
-                record["version"] = 0
-        else:
-            # Create new record
-            record = {}
-            record["version"] = 0
+    def cache_movie(self, movie=None, force=False):
+        record = {}
 
         # Always update rating if more then 10 votes and popularity
         if movie["vote_count"] > 10:
             record["rating"] = movie["vote_average"]
         record["popularity"] = movie["popularity"]
 
-        # Check if record is at current version
-        if record["version"] < 1:
-            # Get original language
-            if "original_language" in movie:
-                record["language"] = movie["original_language"]
-            else:
-                record["language"] = "Unknown"
+        # Get original language
+        if "original_language" in movie:
+            record["language"] = movie["original_language"]
+        else:
+            record["language"] = "Unknown"
 
-            # If original language is self.LANGUAGES then use original title else stick with english version
-            record["alias"] = []
-            if record["language"] in self.LANGUAGES:
-                record["title"] = movie["original_title"]
-                record["alias"].append(movie["title"])
-            else:
-                record["title"] = movie["title"]
-                record["alias"].append(movie["original_title"])
+        # If original language is self.LANGUAGES then use original title else stick with english version
+        record["alias"] = []
+        if record["language"] in self.LANGUAGES:
+            record["title"] = movie["original_title"]
+            record["alias"].append(movie["title"])
+        else:
+            record["title"] = movie["title"]
+            record["alias"].append(movie["original_title"])
 
-            # Release year
-            record["year"] = None
-            record["year_other"] = []
-            if movie["release_date"] != "":
-                record["year"] = int(movie["release_date"][:4])
+        # Release year
+        record["year"] = None
+        record["year_other"] = []
+        if movie["release_date"] != "":
+            record["year"] = int(movie["release_date"][:4])
 
-            logging.info("Getting details for {} ({})".format(record["title"], record["year"]))
+        logging.info("Getting details for {} ({})".format(record["title"], record["year"]))
 
-            # Get cast and director
-            cast = self.send_request_get("movie/{}/credits".format(movie["id"]))
-            for person in cast["cast"]:
-                if person["order"] < 10:
-                    if "cast" not in record:
-                        record["cast"] = []
-                    record["cast"].append(person["name"])
-            for person in cast["crew"]:
-                if person["job"] == 'Director':
-                    if "director" not in record:
-                        record["director"] = []
-                    record["director"].append(person["name"])
+        # Get cast and director
+        cast = self.send_request_get("movie/{}/credits".format(movie["id"]))
+        for person in cast["cast"]:
+            if person["order"] < 10:
+                if "cast" not in record:
+                    record["cast"] = []
+                record["cast"].append(person["name"])
+        for person in cast["crew"]:
+            if person["job"] == 'Director':
+                if "director" not in record:
+                    record["director"] = []
+                record["director"].append(person["name"])
 
-            # Get titles in different languages
-            for language in self.LANGUAGES:
-                self.request["language"] = language
-                alias = self.send_request_get("movie/{}".format(movie["id"]))
+        # Get titles in different languages
+        for language in self.LANGUAGES:
+            self.request["language"] = language
+            alias = self.send_request_get("movie/{}".format(movie["id"]))
 
-                if language == "en":
-                    # Get production country
-                    record["country"] = []
-                    for country in alias["production_countries"]:
-                        name = country["name"]
-                        name = name.replace("United States of America", "USA")
-                        name = name.replace("United Kingdom", "UK")
-                        record["country"].append(name)
+            if language == "en":
+                # Get production country
+                record["country"] = []
+                for country in alias["production_countries"]:
+                    name = country["name"]
+                    name = name.replace("United States of America", "USA")
+                    name = name.replace("United Kingdom", "UK")
+                    record["country"].append(name)
 
-                    # Get genre
-                    record["genre"] = []
-                    for genre in alias["genres"]:
-                        record["genre"].append(genre["name"])
+                # Get genre
+                record["genre"] = []
+                for genre in alias["genres"]:
+                    record["genre"].append(genre["name"])
 
-                    if movie["original_language"] != self.EXCEPTION_LANGUAGE:
-                        # Use English description for everything but Italian movies
-                        record["description"] = alias["overview"]
-
-                # Keep original title and replace description with italian description if movie is in Italian
-                if movie["original_language"] == self.EXCEPTION_LANGUAGE and language == self.EXCEPTION_LANGUAGE:
-                    record["alias"].append(record["title"])
-                    record["title"] = alias["title"]
-                    if alias["title"] in record["alias"]:
-                        record["alias"].remove(alias["title"])
+                if movie["original_language"] != self.EXCEPTION_LANGUAGE:
+                    # Use English description for everything but Italian movies
                     record["description"] = alias["overview"]
 
-                # Add Aliases to movie
-                if self.check_for_dup(alias["title"], record["alias"], record["title"]):
-                    record["alias"].append(alias["title"])
+            # Keep original title and replace description with italian description if movie is in Italian
+            if movie["original_language"] == self.EXCEPTION_LANGUAGE and language == self.EXCEPTION_LANGUAGE:
+                record["alias"].append(record["title"])
+                record["title"] = alias["title"]
+                if alias["title"] in record["alias"]:
+                    record["alias"].remove(alias["title"])
+                record["description"] = alias["overview"]
 
-            # Get alternative titles
-            altTitles = self.send_request_get("movie/{}/alternative_titles".format(movie["id"]))
-            for title in altTitles["titles"]:
-                if title["iso_3166_1"] in self.COUNTRIES:
-                    if self.check_for_dup(title["title"], record["alias"], record["title"]):
-                        record["alias"].append(title["title"])
+            # Add Aliases to movie
+            if self.check_for_dup(alias["title"], record["alias"], record["title"]):
+                record["alias"].append(alias["title"])
 
-            # Get other release dates
-            record["year_other"] = []
-            releaseDates = self.send_request_get("movie/{}/release_dates".format(movie["id"]))
-            for countryDate in releaseDates["results"]:
-                if countryDate["iso_3166_1"] in self.COUNTRIES:
-                    for releaseDate in countryDate["release_dates"]:
-                        if releaseDate["release_date"] != "":
-                            year = int(releaseDate["release_date"][:4])
-                            if abs(year - record["year"]) > 2:
-                                if year not in record["year_other"]:
-                                    record["year_other"].append(year)
+        # Get alternative titles
+        altTitles = self.send_request_get("movie/{}/alternative_titles".format(movie["id"]))
+        for title in altTitles["titles"]:
+            if title["iso_3166_1"] in self.COUNTRIES:
+                if self.check_for_dup(title["title"], record["alias"], record["title"]):
+                    record["alias"].append(title["title"])
 
-            # Get images
-            record["image"] = ""
-            if record["language"] in self.LANGUAGES:
-                self.request["language"] = record["language"]
-            else:
-                self.request["language"] = "en"
+        # Get other release dates
+        record["year_other"] = []
+        releaseDates = self.send_request_get("movie/{}/release_dates".format(movie["id"]))
+        for countryDate in releaseDates["results"]:
+            if countryDate["iso_3166_1"] in self.COUNTRIES:
+                for releaseDate in countryDate["release_dates"]:
+                    if releaseDate["release_date"] != "":
+                        year = int(releaseDate["release_date"][:4])
+                        if abs(year - record["year"]) > 2:
+                            if year not in record["year_other"]:
+                                record["year_other"].append(year)
 
-            images = self.send_request_get("movie/{}/images".format(movie["id"]))
-            imageAspectRatio = 0
-            for image in images["posters"] + images["backdrops"]:
-                if abs(image["aspect_ratio"] - self.IMAGE_ASPECT_RATIO) < abs(imageAspectRatio - self.IMAGE_ASPECT_RATIO):
-                    record["image"] = image["file_path"]
-                    imageAspectRatio = image["aspect_ratio"]
-            if record["image"] != "":
-                logging.debug("Storing image with AR {}".format(round(imageAspectRatio, 2)))
-
+        # Get images
+        record["image"] = ""
+        if record["language"] in self.LANGUAGES:
+            self.request["language"] = record["language"]
         else:
-            logging.debug("No update required for {}".format(movie["title"]))
+            self.request["language"] = "en"
 
-        record["version"] = self.LATEST_VERSION
-        self.es.index(index='tmdb', id=movie["id"], body=record)
+        images = self.send_request_get("movie/{}/images".format(movie["id"]))
+        imageAspectRatio = 0
+        for image in images["posters"] + images["backdrops"]:
+            if abs(image["aspect_ratio"] - self.IMAGE_ASPECT_RATIO) < abs(imageAspectRatio - self.IMAGE_ASPECT_RATIO):
+                record["image"] = image["file_path"]
+                imageAspectRatio = image["aspect_ratio"]
+        if record["image"] != "":
+            logging.debug("Storing image with AR {}".format(round(imageAspectRatio, 2)))
+
+        record["last_updated"] = datetime.datetime.utcnow().isoformat()
+        self.es.index(index='tmdb', id=movie["id"], body=record, params={"refresh": "true"})
 
     def check_for_dup(self, title, alias, orgTitle):
         if alias:
