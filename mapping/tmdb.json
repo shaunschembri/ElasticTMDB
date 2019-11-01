@@ -38,14 +38,14 @@
             "title": {
                 "type": "text"
             },
-            "version": {
-                "type": "byte"
-            },
             "year": {
                 "type": "short"
             },
             "year_other": {
                 "type": "short"
+            },
+            "last_updated": {
+                "type": "date"
             }
         }
     }
