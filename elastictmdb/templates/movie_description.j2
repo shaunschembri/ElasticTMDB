@@ -1,0 +1,21 @@
+{% if (record._source.tagline is defined) and record._source.tagline %}{{ record._source.tagline }}
+
+{% endif -%}
+{% if (record._source.description is defined) and record._source.description %}{{ record._source.description }}
+
+{% endif -%}
+{% if record._source.credits.actor is defined %}Cast: {% for person in record._source.credits.actor[:5] %}{{ person }}{{ ", " if not loop.last }}{% endfor %}
+{% endif -%}
+{% if record._source.credits.director is defined %}Director: {% for person in record._source.credits.director[:2] %}{{ person }}{{ ", " if not loop.last }}{% endfor %}
+{% endif -%}
+{% if record._source.genre is defined %}Genre: {% for person in record._source.genre[:5] %}{{ person }}{{ ", " if not loop.last }}{% endfor %}
+{% endif -%}
+{% if record._source.year is defined %}Year: {{ record._source.year }}
+{% endif -%}
+{% if record._source.country is defined %}Country: {% for country in record._source.country %}{{ country }}{{ ", " if not loop.last }}{% endfor %}
+{% endif -%}
+{% if record._source.rating.tmdb.average is defined %}Rating: {{ '%0.1f' % record._source.rating.tmdb.average }}
+{% endif -%}
+{% if record._source.language is defined %}Language: {{ record._source.language }}
+{% endif -%}
+Score: {{ '%0.1f' % record._score }}

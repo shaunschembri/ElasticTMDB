@@ -1,291 +1,319 @@
 #!/usr/bin/env python3
 import argparse
 import logging
-import json
-import os
-import io
 import re
-import configparser
-import xml.etree.ElementTree as et
+from lxml import etree
+from elastictmdb.movie import Movie
+from elastictmdb.tvshow import Tvshow
+import collections
+import datetime
 import traceback
-from datetime import datetime, timedelta
-import time
-import elastictmdb
-import preprocess
 
-class xmltv(object):
+class epg(object):
     def __init__(self, force=False):
-        # Initialise ElasticTMDB
-        self.ElasticTMDB = elastictmdb.ElasticTMDB()
+        # Initialise ElasticTMDB Objects
+        self.movie = Movie()
+        self.tvshow = Tvshow()
 
-        # Initialise output XMLTV object
-        self.output = et.Element("tv")
-
-        # Set force flag
         self.force = force
 
-        # Read config
-        config = configparser.ConfigParser()
-        config.read(os.path.join(os.path.dirname(__file__), "elastictmdb.conf"))
-        self.enablePreprocessing = config.getboolean("process_xmltv", "enable_preprocess_function")
-        self.mainLanguage = config.get("main", "main_language")
-        self.exceptionLanguage = config.get("main", "exception_language")
-
-        # Programme Categories as specified by the DVB EIT Standard under which movies and tvshows are listed
-        self.categoryMovie = ["Movie / Drama",
-                              "Detective / Thriller",
-                              "Adventure / Western / War",
-                              "Science fiction / Fantasy / Horror",
-                              "Comedy",
-                              "Soap / Melodrama / Folkloric",
-                              "Romance",
-                              "Serious / Classical / Religious / Historical movie / Drama",
-                              "Adult movie / Drama"]
-
-        # Load list of mapping to map catagories in XMLTV files to DVB EIT Standard list
-        with open(os.path.join(os.path.dirname(__file__), "epg_category.json"), mode="r") as jsonfile:
-            self.epgCategory = json.load(jsonfile, encoding="utf-8")
-
-        # Store last channel definition position. This is used so that all channel elemnets are at the top of the file as required by the XMLTV standard
-        self.channelPos = 0
+        self.outputXmltv = xmltv()
 
     def process_file(self, filename):
-        logging.info("Parsing {}".format(filename))
-        xmlTree = et.parse(filename).getroot()
-        logging.info("Parsing events")
+        inputXmltv = xmltv()
+        inputXmltv.load_xmltv(filename=filename)
 
-        for item in xmlTree:
+        # Add channels to output file
+        self.outputXmltv.channels += inputXmltv.channels
+
+        # Parse programmes
+        for programmeElement in inputXmltv.programmes:
             try:
-                if item.tag == 'channel':
-                    # Remove icons
-                    icons = item.findall('icon')
-                    for icon in icons:
-                        item.remove(icon)
-
-                    # Remove URL
-                    urls = item.findall('url')
-                    for url in urls:
-                        item.remove(url)
-
-                    self.output.insert(self.channelPos, item)
-                    self.channelPos += 1
-
-                elif item.tag == 'programme':
-                    if self.enablePreprocessing:
-                        item = preprocess.preprocess(item)
-                    self.output.append(item)
-
-                    # Determine Category
-                    isSeries = False
-                    itemContentType = None
-                    categories = item.findall('category')
-                    for category in categories:
-                        categoryName = category.text.lower()
-                        # Add category if it does not exists and tries to automap movie categories
-                        if categoryName not in self.epgCategory:
-                            if re.search("film|movie|cinema|drama|thriller", categoryName, re.IGNORECASE):
-                                logging.info("Adding category - {} and mapping it to Movie / Drama".format(categoryName))
-                                self.epgCategory[categoryName] = "Movie / Drama"
-                            else:
-                                logging.info("Adding category - {}".format(categoryName))
-                                self.epgCategory[categoryName] = None
-
-                        if self.epgCategory[categoryName] is not None:
-                            if not itemContentType:
-                                itemContentType = self.epgCategory[categoryName]
-                        if re.search("serie|téléfilm", categoryName, re.IGNORECASE):
-                            isSeries = True
-
-                        item.remove(category)
-                    if itemContentType is not None:
-                        category = et.SubElement(item, 'category', lang="en")
-                        category.text = itemContentType
-
-                    # Remove rating as we will use the ones we have obtained from TMDB
-                    ratings = item.findall('rating')
-                    for rating in ratings:
-                        item.remove(rating)
-
-                    # Remove rating as we will use the ones we have obtained from TMDB
-                    starratings = item.findall('star-rating')
-                    for starrating in starratings:
-                        item.remove(starrating)
-
-                    # Check if programme has a year and director, if both are present programme might be a movie
-                    hasYear = False
-                    year = item.find("date")
-                    if year is not None:
-                        hasYear = True
-
-                    hasDirector = False
-                    persons = item.find("credits")
-                    if persons is not None:
-                        for director in persons.findall("director"):
-                            hasDirector = True
-                            break
-
-                    # Perform extra checks to determine if programme is actually a Movie
-                    if itemContentType is not None or not isSeries:
-                        if itemContentType in self.categoryMovie or (hasYear and hasDirector):
-                            # Check if length is 70min (4200sec) or more to be considered a movie, else consider it a TV show
-                            start = item.attrib["start"]
-                            stop = item.attrib["stop"]
-                            if self.get_unixtime_from_ts(stop) - self.get_unixtime_from_ts(start) >= 4200:
-                                item = self.process_movie(item)
-
+                programme = inputXmltv.parse_element(element=programmeElement)
+                programmeType = self.get_programme_type(programme=programme)
+                if programmeType == "movie":
+                    programme = self.process_movie(programme=programme)
+                elif programmeType == "tvshow":
+                    programme = self.process_tvshow(programme=programme)
+                self.outputXmltv.build_programme_element(record=programme)
             except Exception:
                 logging.error(traceback.format_exc())
 
-        # Save epg category
-        with io.open(os.path.join(os.path.dirname(__file__), "epg_category.json"), 'w', encoding="utf-8") as jsonfile:
-            jsonfile.write(json.dumps(self.epgCategory, ensure_ascii=False, indent=3, sort_keys=True))
+    def get_programme_type(self, programme):
+        # Ignore the catagories
+        for category in programme.get("category", []):
+            regex = re.search("sport|news", category["_text"], flags=re.IGNORECASE)
+            if regex:
+                return None
 
-    def process_movie(self, item):
-        itemTitle = item.findall("title")[0]
-        msg = {}
-        msg["title"] = itemTitle.text
-        msg["force"] = self.force
+        # Loop through categories to detect TV Shows
+        for category in programme.get("category", []):
+            regex = re.search("tvshow|episode|telefilm|serial|series", category["_text"], flags=re.IGNORECASE)
+            if regex:
+                return "tvshow"
 
-        # Date
-        year = item.find("date")
-        if year is not None:
-            msg["year"] = int(year.text)
+        # Loop again through categories to detect movies
+        for category in programme.get("category", []):
+            regex = re.search("movie|cinema|kino|featurefilm|cine", category["_text"], flags=re.IGNORECASE)
+            if regex:
+                return "movie"
+            regex = re.search("documentary", category["_text"], flags=re.IGNORECASE)
+            if regex:
+                return self.get_programme_type_by_duration(start=programme["_attrib"]["start"], stop=programme["_attrib"]["stop"])
 
-        # Director and cast
-        persons = item.find("credits")
-        if persons is not None:
-            for director in persons.findall("director"):
-                if "director" not in msg:
-                    msg["director"] = []
-                msg["director"].append(director.text)
-            for cast in persons.findall("actor"):
-                if "cast" not in msg:
-                    msg["cast"] = []
-                msg["cast"].append(cast.text)
+        # If episode-num tag present then consider it a tvshow
+        if "episode-num" in programme:
+            return "tvshow"
 
-        tmdbResult = self.ElasticTMDB.search_movie(msg)
-        if tmdbResult:
-            # Remove all titles, so to create a new one with the title found
-            titles = item.findall('title')
-            for title in titles:
-                item.remove(title)
+        # If credits tag is present then use the duration to determine if its a tvshow or movie
+        if "credits" in programme:
+            return self.get_programme_type_by_duration(start=programme["_attrib"]["start"], stop=programme["_attrib"]["stop"])
 
-            # Set title
-            title = et.Element('title')
-            # Try to decode title as unicode, if it fails use it undecoded
-            try:
-                title.text = tmdbResult["_source"]["title"]
-            except Exception:
-                title.text = tmdbResult["_source"]["title"]
-            title.set("lang", tmdbResult["_source"]["language"])
-            item.insert(0, title)
-
-            # Set Subtitle
-            subtitle = item.find('sub-title')
-            if subtitle is None:
-                subtitle = et.SubElement(item, 'sub-title')
-
-            if tmdbResult["_source"]["genre"]:
-                subtitle.text = "{} - {}".format(tmdbResult["_source"]["year"], ", ".join(tmdbResult["_source"]["genre"]))
-            else:
-                subtitle.text = str(tmdbResult["_source"]["year"])
-
-            subtitle.set("lang", self.mainLanguage)
-
-            # Set Image
-            if tmdbResult["_source"]["image"]:
-                icon = item.find('icon')
-                if icon is None:
-                    icon = et.SubElement(item, 'icon')
-                icon.set("src", tmdbResult["_source"]["image"])
-
-            # Set description
-            desc = item.find('desc')
-            if desc is None:
-                desc = et.SubElement(item, 'desc')
-            desc.text = self.build_movie_description(tmdbResult)
-            if tmdbResult["_source"]["language"] == self.exceptionLanguage:
-                desc.set("lang", self.exceptionLanguage)
-            else:
-                desc.set("lang", self.mainLanguage)
-
-            # Set date
-            if year is None:
-                year = et.SubElement(item, 'year')
-            year.text = str(tmdbResult["_source"]["year"])
-
-            # Set director and cast
-            if persons is not None:
-                item.remove(persons)
-            persons = et.SubElement(item, 'credits')
-            if "director" in tmdbResult["_source"]:
-                for person in tmdbResult["_source"]["director"]:
-                    director = et.SubElement(persons, 'director')
-                    director.text = person
-            if "cast" in tmdbResult["_source"]:
-                for person in tmdbResult["_source"]["cast"]:
-                    cast = et.SubElement(persons, 'actor')
-                    cast.text = person
-
-            # Set rating
-            if "rating" in tmdbResult["_source"]:
-                rating = et.SubElement(item, 'star-rating')
-                value = et.SubElement(rating, 'value')
-                value.text = "{}/10".format(str(tmdbResult["_source"]["rating"]))
-
-        return item
-
-    def build_movie_description(self, tmdbResult):
-        if tmdbResult:
-            desc = []
-            if 'cast' in tmdbResult["_source"]:
-                desc.append("Cast: {}".format(", ".join(tmdbResult["_source"]["cast"][:5])))
-
-            if 'director' in tmdbResult["_source"]:
-                desc.append("Director: {}".format(", ".join(tmdbResult["_source"]["director"])))
-
-            if 'rating' in tmdbResult["_source"]:
-                desc.append("Rating: {}".format(tmdbResult["_source"]["rating"]))
-
-            if 'description' in tmdbResult["_source"]:
-                desc.append("\n{}\n".format(tmdbResult["_source"]["description"]))
-
-            if 'year' in tmdbResult["_source"]:
-                desc.append("Year: {}".format(tmdbResult["_source"]["year"]))
-
-            if 'genre' in tmdbResult["_source"]:
-                desc.append("Genre: {}".format(", ".join(tmdbResult["_source"]["genre"])))
-
-            if 'language' in tmdbResult["_source"]:
-                desc.append("Language: {}".format(self.ElasticTMDB.get_language(tmdbResult["_source"]["language"])))
-
-            if 'country' in tmdbResult["_source"]:
-                desc.append("Country: {}".format(", ".join(tmdbResult["_source"]["country"])))
-
-            if 'popularity' in tmdbResult["_source"]:
-                desc.append("Popularity: {:.1f}".format(tmdbResult["_source"]["popularity"]))
-
-            if '_score' in tmdbResult:
-                desc.append("Score: {:.1f}".format(tmdbResult["_score"]))
-
-            result = "\n".join(desc)
-            # Remove this character which crashes importing in enigma2 devices
-            result = re.sub('', '', result)
-            return result
-
-    def get_unixtime_from_ts(self, t):
-        ret = datetime.strptime(t[0:13], "%Y%m%d%H%M%S")
-        if t[15] == '-':
-            ret += timedelta(hours=int(t[16:18]), minutes=int(t[18:20]))
-        elif t[15] == '+':
-            ret -= timedelta(hours=int(t[16:18]), minutes=int(t[18:20]))
-        return int(time.mktime(ret.timetuple()))
+    def get_programme_type_by_duration(self, start, stop):
+        if self.get_unixtime_from_ts(stop) - self.get_unixtime_from_ts(start) >= 4200:
+            return "movie"
+        else:
+            return "tvshow"
 
     def save_file(self, filename):
-        # Saving final xmltv file
-        logging.info("Saving to {}".format(filename))
-        with open(os.path.join(filename), 'wb') as xmlFile:
-            xmlFile.write(et.tostring(self.output, encoding="UTF-8"))
+        self.outputXmltv.save_xmltv(filename=filename)
+
+    def process_movie(self, programme):
+        request = self.build_query(programme=programme)
+        if "date" in programme:
+            request["year"] = programme["date"][0]["_text"][:4]
+
+        response = self.movie.search(search=request)
+        if response:
+            programme["desc"] = [self.outputXmltv.add_text_element(text=self.movie.render_template(record=response, template="description"), lang="en")]
+            programme["sub-title"] = [self.outputXmltv.add_text_element(text=self.movie.render_template(record=response, template="subtitle"), lang="en")]
+            programme = self.update_programme(programme=programme, response=response)
+
+        return programme
+
+    def process_tvshow(self, programme):
+        request = self.build_query(programme=programme)
+        if "episode-num" in programme:
+            for episodeNum in programme["episode-num"]:
+                regex = re.search(r"^S([0-9]+)", episodeNum["_text"], flags=re.IGNORECASE)
+                if regex:
+                    request["season"] = int(regex.group(1))
+                regex = re.search(r"E([0-9]+)", episodeNum["_text"], flags=re.IGNORECASE)
+                if regex:
+                    request["episode"] = int(regex.group(1))
+            if "season" in request and "episode" in request:
+                episodeNum = "S{:02d}E{:02d}".format(request["season"], request["episode"])
+                programme["episode-num"] = [self.outputXmltv.add_episode_num_element(episodeNum=episodeNum)]
+
+        if "sub-title" in programme:
+            request["subtitle"] = []
+            for subtitle in programme["sub-title"]:
+                request["subtitle"].append(subtitle["_text"])
+
+        if "date" in programme:
+            request["episode_year"] = []
+            for episodeYear in programme["date"]:
+                request["episode_year"].append(episodeYear["_text"][:4])
+
+        response = self.tvshow.search(search=request)
+        if response:
+            programme["desc"] = [self.outputXmltv.add_text_element(text=self.tvshow.render_template(record=response, template="description"), lang="en")]
+            programme["sub-title"] = [self.outputXmltv.add_text_element(text=self.tvshow.render_template(record=response, template="subtitle"), lang="en")]
+
+            # Add episode number
+            if "season" in response and "episode" in response:
+                episodeNum = "S{:02d}E{:02d}".format(response["season"], response["episode"])
+                programme["episode-num"] = [self.outputXmltv.add_episode_num_element(episodeNum=episodeNum)]
+
+            programme = self.update_programme(programme=programme, response=response)
+
+        return programme
+
+    def build_query(self, programme):
+        # Build query for ElasticTMDB
+        request = {}
+        request["force"] = self.force
+        # Add titles
+        if "title" in programme:
+            request["title"] = []
+            for title in programme["title"]:
+                request["title"].append(title["_text"])
+        # Add Country
+        if "country" in programme:
+            request["country"] = []
+            for country in programme["country"]:
+                request["country"].append(country["_text"])
+        # Add Credits
+        if "credits" in programme:
+            for credit in programme["credits"]:
+                for creditName, creditValue in credit.items():
+                    if creditName == "director":
+                        request["director"] = []
+                        for director in creditValue:
+                            request["director"].append(director["_text"])
+                    elif creditName == "actor" or creditName == "presenter":
+                        request["actor"] = []
+                        for actor in creditValue:
+                            request["actor"].append(actor["_text"])
+                    else:
+                        if "other" not in request:
+                            request["other"] = []
+                        for person in creditValue:
+                            request["other"].append(person["_text"])
+
+        return request
+
+    def update_programme(self, programme, response):
+        # Replace Title
+        programme["title"] = [self.outputXmltv.add_text_element(text=response["_source"]["title"], lang="en")]
+
+        # Replace Image
+        if "image" in response["_source"]:
+            programme["icon"] = [self.outputXmltv.add_icon_element(url=response["_source"]["image"])]
+
+        # Replace Credits
+        programmeCredits = {}
+        if "director" in response["_source"]["credits"]:
+            programmeCredits["director"] = []
+            for director in response["_source"]["credits"]["director"]:
+                programmeCredits["director"].append(self.outputXmltv.add_text_element(text=director, lang=None))
+
+        if "actor" in response["_source"]["credits"]:
+            programmeCredits["actor"] = []
+            for actor in response["_source"]["credits"]["actor"]:
+                programmeCredits["actor"].append(self.outputXmltv.add_text_element(text=actor, lang=None))
+
+        if programmeCredits:
+            programme["credits"] = [programmeCredits]
+
+        # Replace year
+        programme["date"] = [self.outputXmltv.add_text_element(text=response["_source"]["year"])]
+
+        # Replace country
+        if response["_source"]["country"]:
+            programme["country"] = []
+            for country in response["_source"]["country"]:
+                programme["country"].append(self.outputXmltv.add_text_element(text=country, lang="en"))
+
+        # Replace categories
+        programme["category"] = []
+        for genre in response["_source"]["genre"]:
+            programme["category"].append(self.outputXmltv.add_text_element(text=genre, lang="en"))
+
+        # Replace rating
+        if "rating" in response["_source"]:
+            programme["star-rating"] = self.outputXmltv.add_element_value_subelement(text="{}/10".format(response["_source"]["rating"]["tmdb"]["average"]))
+
+        return programme
+
+    def get_unixtime_from_ts(self, timestamp):
+        parsedTs = datetime.datetime.strptime(timestamp[0:13], "%Y%m%d%H%M%S")
+        if timestamp[15] == '-':
+            parsedTs += datetime.timedelta(hours=int(timestamp[16:18]), minutes=int(timestamp[18:20]))
+        elif timestamp[15] == '+':
+            parsedTs -= datetime.timedelta(hours=int(timestamp[16:18]), minutes=int(timestamp[18:20]))
+        return parsedTs.timestamp()
+
+class xmltv(object):
+    def __init__(self):
+        self.channels = []
+        self.programmes = []
+
+    def load_xmltv(self, filename):
+        logging.info("Parsing {}".format(filename))
+        parser = etree.XMLParser(remove_blank_text=True)
+        xmltvFile = etree.parse(filename, parser).getroot()
+
+        # Load channels
+        channels = xmltvFile.findall("channel")
+        logging.info("Found {} channels".format(len(channels)))
+        for channel in channels:
+            self.channels.append(channel)
+
+        # Load programmes
+        programmes = xmltvFile.findall("programme")
+        logging.info("Found {} programmes".format(len(programmes)))
+        for programme in programmes:
+            self.programmes.append(programme)
+
+    def save_xmltv(self, filename):
+        tvElement = etree.Element("tv")
+
+        # Save channels
+        for channel in self.channels:
+            tvElement.append(channel)
+
+        # Save programme
+        for programme in self.programmes:
+            tvElement.append(programme)
+
+        # Save XML file
+        with open(filename, "wb") as xmlFileObj:
+            xmlFileObj.write(etree.tostring(tvElement, pretty_print=True, encoding="utf-8"))
+
+    def parse_element(self, element):
+        record = collections.OrderedDict()
+        # Get element attributes, add them to a list to preserve order
+        if element.attrib:
+            record["_attrib"] = collections.OrderedDict()
+            for attrib in element.attrib.items():
+                record["_attrib"][attrib[0]] = attrib[1]
+        # Get element text
+        if element.text:
+            record["_text"] = element.text
+        # Parse subelements
+        if len(element) > 0:
+            for subElement in element.getchildren():
+                if subElement.tag not in record:
+                    record[subElement.tag] = []
+                record[subElement.tag].append(self.parse_element(element=subElement))
+        return record
+
+    def build_programme_element(self, record):
+        element = self.build_element(record=record, elementName="programme")
+        self.programmes.append(element)
+
+    def build_element(self, record, elementName):
+        element = etree.Element(elementName)
+        #  Insert attributes
+        if "_attrib" in record:
+            for attribName, attribValue in record["_attrib"].items():
+                element.set(attribName, attribValue)
+        # Add text to element
+        if "_text" in record:
+            element.text = record["_text"]
+        # Add children
+        for childName, childValue in record.items():
+            if childName[0] == "_":
+                continue
+            for childValue in record[childName]:
+                subElement = self.build_element(record=childValue, elementName=childName)
+                element.append(subElement)
+        return element
+
+    def add_text_element(self, text, lang=None):
+        record = {}
+        record["_text"] = str(text)
+        if lang:
+            record["_attrib"] = {"lang": lang}
+        return record
+
+    def add_element_value_subelement(self, text):
+        record = []
+        record.append({"value": []})
+        record[0]["value"].append(self.add_text_element(text=text, lang=None))
+        return record
+
+    def add_episode_num_element(self, episodeNum):
+        record = {}
+        record["_text"] = episodeNum
+        record["_attrib"] = {"system": "onscreen"}
+        return record
+
+    def add_icon_element(self, url):
+        record = {"_attrib": {}}
+        record["_attrib"]["src"] = url
+        return record
 
 if __name__ == "__main__":
     # Parse command line arguments
@@ -297,17 +325,23 @@ if __name__ == "__main__":
     required.add_argument("-o", "--output", type=str, help="Output XMLTV file")
     optional.add_argument("-l", "--logfile", type=str, help="Output log to file")
     optional.add_argument("-f", "--force", action="store_true", help="Force search for all movies")
+    optional.add_argument("-d", "--debug", action="store_true", help="Enable debug")
     args = argParser.parse_args()
 
-    if args.logfile:
-        logging.basicConfig(level=logging.INFO, filename=args.logfile, format="%(asctime)s %(message)s")
+    if args.debug:
+        logLevel = logging.DEBUG
     else:
-        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+        logLevel = logging.INFO
 
-    XMLTV = xmltv(force=args.force)
+    if args.logfile:
+        logging.basicConfig(level=logLevel, filename=args.logfile, format="%(asctime)s %(message)s")
+    else:
+        logging.basicConfig(level=logLevel, format="%(asctime)s %(message)s")
+
+    epg = epg(force=args.force)
     # Process input files
     for filename in args.input:
-        XMLTV.process_file(filename)
+        epg.process_file(filename)
     # Save file
-    XMLTV.save_file(args.output)
+    epg.save_file(args.output)
     logging.info("Done")

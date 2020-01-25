@@ -1,12 +1,18 @@
 # ElasticTMDB
 
-ElasticTMDB is a Python3 library which sources movie details from The Movie Database (TMDB) and caches them in an Elasticsearch index to speed up subsequent queries to the same movie. The class will store a lot of information about a movie (cast, director, synopsis, user ratings, release year, poster etc) together with the movie title in a number of languages.  This is particularly useful to convert a movie programme listed in its foreign language title to its original language title.
+ElasticTMDB is a Python3 module which sources movie and TV show details from The Movie Database (TMDB) and caches them in an Elasticsearch index to speed up subsequent queries to the same title.
+
+## Features
+- Leverages the power of Elasticsearch to search and match titles
+- Stores titles in various languages so that a title can be matched with its foreign title. This is particularly useful to match a programme listed in its foreign language
+- Uses Jinja2 templates to provide a flexible way to display the data
+- Can be used to enrich data stored in [XMLTV](http://wiki.xmltv.org/index.php/Main_Page) format 
 
 ## Getting Started
 
 ### Prerequisites
-* Python 3.6 or newer (for Python 2.7 use the python2 tag/release)
-* Elasticsearch Server 7.x (python2 release supports ES6.x)
+* Python 3.6+
+* Elasticsearch 7.x (7.5+ is recommended)
 * TMDB API key
 
 ### Python Modules
@@ -15,8 +21,15 @@ Install dependencies by executing
 pip3 install -r requirements.txt
 ```
 
-### Elasticsearch Server
-Follow the instructions [here](https://www.elastic.co/downloads/elasticsearch) to install a fresh Elasticsearch server.  If you already have Elasticsearch installed, you can use it along side other applications as ElasticTMDB will create 2 new indexes on first execution and will not interfere with any other indexes present.  The indexes will created with 1 shard and no replicas so optimised for a single node cluster. Please modify the number_of_shards and number_of_replicas value in the [mapping](mapping) files if you would like to create the indexes with more shards and with replicas.
+### Elasticsearch
+There are various ways to get started with Elasticseach by following [these instructions.](https://www.elastic.co/downloads/elasticsearch) The easiest ways are:
+- Install through [Docker](https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html)
+- Setup a 14-day trail on [Elastic Cloud](https://cloud.elastic.co/)
+
+Storing tens of thousands of records will only require a few hundred MBs and since Elasticsearch is used just for caching, it can be setup as a single node cluster as all data can be retrieved back from TMDB.
+The indexes will be created with 1 shard and no replicas so optimised for a single node cluster. You can modify the `number_of_shards` and `number_of_replicas` value in the [mapping](elastictmdb/index_mapping) files if you would like to create the indexes with more shards and with replicas.
+
+If you already have Elasticsearch installed, you can use it along side other applications as ElasticTMDB will create 5 indexes on first execution and will not interfere with any other indexes present.
 
 ### TMDB API Key
 Obtain a key to The Movie Database to access the API. To obtain the API key, follow these steps:
@@ -28,201 +41,178 @@ Obtain a key to The Movie Database to access the API. To obtain the API key, fol
 
 ### Configuring
 Clone or [download](https://github.com/shaunschembri/ElasticTMDB/archive/master.zip) this repository.
-Review settings in elastictmdb.conf. All options are documented in the file but if you are starting with a new/empty cache you only need to set the TMDB API key and the Elasticsearch connection details.
+Default settings are fine to get started with but you can change the settings by modifying the [config](elastictmdb/config.py) file. 
+Empty indexes are not useful so it highly recommended to cache a few titles first.  Once can use the `cache_title.py` utility to cache the most popular movies and shows. By default the utility will cache 1000 movies and TV shows, but this can be changed via command line parameters.
 
 ## Usage
 
 ### get_movie_details
 
-The simplest way to use ElasticTMDB (but not really useful) is to run the get_movie_details.py and pass the query details via command line.  It will return a JSON document with the movie details.  This utility can also serve as an example to integrate ElasticTMDB in you own applications. 
+The simplest way to use ElasticTMDB (but not really useful) is to run the `get_details.py` and pass the query details as command line parameters.
+It will either return a JSON document with the details or uses a Jinja2 template to format the results
 
 ```
-usage: get_movie_details.py [-h] -t TITLE [-d DIRECTOR] [-c CAST] [-y YEAR]
-                            [-f]
+usage: get_details.py [-h] [-m] [-t] -n TITLE [-d DIRECTOR] [-a ACTOR]
+                      [-y YEAR] [-s MINSCORE] [-f] [-j] [-v]
+
 required arguments:
-  -t TITLE, --title TITLE
-                        Movie title
+  -n TITLE, --title TITLE
+                        Name of title
+
 optional arguments:
+  -m, --movie           Cache Only Movie Titles
+  -t, --tvshow          Cache Only TV Titles
   -d DIRECTOR, --director DIRECTOR
                         Name of director. Can be used more then once to
                         specify more the 1 director
-  -c CAST, --cast CAST  Name of actor. Can be used more then once to specify
+  -a ACTOR, --actor ACTOR
+                        Name of actor. Can be used more then once to specify
                         more cast members
   -y YEAR, --year YEAR  Movie release year
+  -s MINSCORE, --minscore MINSCORE
+                        Minimum score to accept as a valid result
   -f, --force           Force a search on TMDB before returning results
+  -j, --json            Output result in JSON
+  -v, --verbose         Enable debug/verbose output
 ```
 Example
 ```
-python3 get_movie_details.py -t "Stirb langsam" -y 1988 -c "Bruce Willis" -c "Alan Rickman" -d "John McTiernan"
-```
-Result
-```
-{
-   "_type": "movie", 
-   "_source": {
-      "rating": 7.5, 
-      "description": "NYPD cop, John McClane's plan to reconcile with his estranged wife is thrown for a serious loop when minutes after he arrives at her office, the entire building is overtaken by a group of terrorists. With little help from the LAPD, wisecracking McClane sets out to single-handedly rescue the hostages and bring the bad guys down.", 
-      "language": "en", 
-      "title": "Die Hard", 
-      "country": [
-         "USA"
-      ], 
-      "year_other": [
-         1999, 
-         2007
-      ], 
-      "popularity": 21.527401, 
-      "director": [
-         "John McTiernan"
-      ], 
-      "cast": [
-         "Bruce Willis", 
-         "Alan Rickman", 
-         "Alexander Godunov", 
-         "Bonnie Bedelia", 
-         "Reginald VelJohnson", 
-         "Paul Gleason", 
-         "De'voreaux White", 
-         "William Atherton", 
-         "Clarence Gilyard Jr.", 
-         "Hart Bochner"
-      ], 
-      "alias": [
-         "Die Hard", 
-         "Stirb langsam", 
-         "Die Hard - Trappola di cristallo", 
-         "Jungla de cristal", 
-         "Pi\u00e8ge de cristal", 
-         "Stirb Langsam 1", 
-         "Die Hard 1 Pi\u00e8ge de cristal"
-      ], 
-      "last_updated": "2019-10-31T15:58:57.485537",
-      "year": 1988, 
-      "genre": [
-         "Action", 
-         "Thriller"
-      ], 
-      "image": "http://image.tmdb.org/t/p/w300/mc7MubOLcIw3MDvnuQFrO9psfCa.jpg"
-   }, 
-   "_score": 43.040012, 
-   "_index": "tmdb", 
-   "_version": 17, 
-   "found": true, 
-   "_id": "562"
-}
+$ TMDB_API_KEY=<api_key> python3 get_details.py -m -n "Star Wars Skywalker" -y 2019 -a "Adam Driver" -a "Carrie Fisher" -d "J.J. Abrams"
+Title : Star Wars: The Rise of Skywalker
+
+The surviving Resistance faces the First Order once again as the journey of Rey, Finn and Poe Dameron continues. With the power and knowledge of generations behind them, the final battle begins.
+
+Cast: Carrie Fisher, Mark Hamill, Adam Driver, Daisy Ridley, John Boyega
+Director: J.J. Abrams
+Genre: Action, Adventure, Science Fiction
+Year: 2019
+Country: United States of America
+Rating: 6.6
+Language: English
+Score: 67.1
 ```
 
 ### process_xmltv
 
-A more useful application of ElasticTMDB class is the process_xmltv.py utility, which takes one or more [XMLTV](http://wiki.xmltv.org/index.php/Main_Page) files, detect movies in the programmes listed and outputs an XMLTV file with the detected movie's description replaced with data sourced from TMDB.  Other programme listings are not touched.
-
-The utility will detect a movie based on the category of the programme.  According to the DVB EIT specification a movie should have one of the below categories, however as many XMLTV files contains different terms for these categories, you can map the provider categories to any one of the below in the epg_category.json. New categories are automatically added in epg_category.json as discovered by process_xmltv.py.
-```
-Movie / Drama
-Detective / Thriller
-Adventure / Western / War
-Science fiction / Fantasy / Horror
-Comedy
-Soap / Melodrama / Folkloric
-Romance
-Serious / Classical / Religious / Historical movie / Drama
-Adult movie / Drama
-```
-As the above categories also include TV shows, a programme should be a minimum of 70 minutes in length to be considered a movie.
-
-The preprocess.py file includes a python function that is executed before a programme is processed. The included function will remove all title tags except one with the attribute lang set to "xx" if this is present. This attribute contains the original name of the program hence replacing any localised version of the programme.  Pre-processing can be switched on inside the elastictmdb.conf config file.
+A more useful application of ElasticTMDB is to process an XMLTV file with `process_xmltv.py` which takes one or more XMLTV files as input.
+The utility will try to guess which programmes are movies or tvshows and updates the programme entry with details as sourced from TMDB. Other programmes are not touched.
 
 ```
-usage: process_xmltv.py [-h] [-i INPUT] [-o OUTPUT] [-l LOGFILE]
+usage: process_xmltv.py [-h] [-i INPUT] [-o OUTPUT] [-l LOGFILE] [-f] [-d]
+
 required arguments:
   -i INPUT, --input INPUT
                         Input XMLTV file
   -o OUTPUT, --output OUTPUT
                         Output XMLTV file
+
 optional arguments:
   -l LOGFILE, --logfile LOGFILE
                         Output log to file
+  -f, --force           Force search for all movies
+  -d, --debug           Enable debug
 ```
 Example
 ```
-python3 process_xmltv.py -i input.xml -o output.xml
+TMDB_API_KEY=<api_key> python3 process_xmltv.py -i input.xml -o output.xml
 ```
 Input XMLTV file (input.xml)
-```
-<?xml version="1.0" encoding="UTF-8"?>
+```xml
 <tv>
-	<channel id="moviechannel.de">
-		<display-name lang="en">Die Movie Channel</display-name>
-	</channel>
-	<programme start="20180425210000 +0000" stop="20180425223000 +0000" channel="moviechannel.de">
-		<title lang="de">Stirb langsam</title>
-		<desc lang="de">Der New Yorker Polizist John McClane fährt zum Weihnachtsfest nach Kalifornien, um sich dort mit seiner Frau, die bei einem japanischen Konzern Karriere gemacht hat, zu versöhnen. Als er in dem riesigen Bürohaus ankommt und sich gerade im Waschraum frischmacht, stürmen dreißig schwerbewaffnete Gangs... </desc>
-		<credits>
-			<director>John McTiernan</director>
-			<actor>Bruce Willis</actor>
-			<actor>Alan Rickman</actor>
-			<actor>Bonnie Bedelia</actor>
-		</credits>
-		<date>1988</date>
-		<category lang="de">Film</category>
-	</programme>
+  <programme start="20200101203000 +0000" stop="20200101213000 +0000" channel="channel.id">
+    <title lang="it">Covert affairs</title>
+    <credits>
+      <actor>Piper Perabo</actor>
+    </credits>
+    <category lang="en">Episode</category>
+    <episode-num system="onscreen">S05E05</episode-num>
+  </programme>
+<programme start="20200102203000 +0000" stop="20200102234500 +0000" channel="channel.id">
+    <title lang="it">Terminator 2: il giorno del giudizio</title>
+    <desc lang="it">Secondo capitolo della saga e vincitore di 4 premi Oscar. Sarah e suo figlio sono minacciati da un nuovo Terminator, ma qualcuno accorre in loro aiuto. Regia di J. Cameron; USA 1991</desc>
+    <credits>
+      <director>James Cameron</director>
+      <actor>Arnold Schwarzenegger</actor>
+    </credits>
+    <date>1991</date>
+    <category lang="it">Film</category>
+  </programme>
 </tv>
 ```
 Output XMLTV file (output.xml)
-```
-<?xml version='1.0' encoding='UTF-8'?>
+```xml
 <tv>
-	<channel id="moviechannel.de">
-		<display-name lang="en">Die Movie Channel</display-name>
-	</channel>
-	<programme channel="moviechannel.de" start="20180425210000 +0000" stop="20180425223000 +0000">
-		<title lang="xx">Die Hard</title>
-		<desc lang="de">Cast: Bruce Willis, Alan Rickman, Alexander Godunov, Bonnie Bedelia, Reginald VelJohnson
-Director: John McTiernan
-Rating: 7.5
+  <programme start="20200101203000 +0000" stop="20200101213000 +0000" channel="channel.id">
+    <title lang="en">Covert Affairs</title>
+    <credits>
+      <actor>Piper Perabo</actor>
+      <actor>Christopher Gorham</actor>
+      <actor>Kari Matchett</actor>
+      <actor>Peter Gallagher</actor>
+      <actor>Nic Bishop</actor>
+      <actor>Hill Harper</actor>
+      <actor>Michelle Ryan</actor>
+    </credits>
+    <category lang="en">Drama</category>
+    <category lang="en">Action &amp; Adventure</category>
+    <episode-num system="onscreen">S05E05</episode-num>
+    <desc lang="en">A young CIA operative, Annie Walker, is mysteriously summoned to headquarters for duty as a field operative. While Annie believes she's been promoted for her exceptional linguistic skills, there may be something or someone from her past that her CIA bosses are really after. Auggie Anderson is a CIA military intelligence agent who was blinded while on assignment and is Annie's guide in this world of bureaucracy, excitement and intrigue.
 
-NYPD cop, John McClane's plan to reconcile with his estranged wife is thrown for a serious loop when minutes after he arrives at her office, the entire building is overtaken by a group of terrorists. With little help from the LAPD, wisecracking McClane sets out to single-handedly rescue the hostages and bring the bad guys down.
+Title: Elevate Me Later
+Number: S05E05
+First Aired: 2014-07-22
+Score: 12.1</desc>
+    <sub-title lang="en">S05E05 - Elevate Me Later</sub-title>
+    <icon src="http://image.tmdb.org/t/p/w300/9IA2X82vyoOXX570Pa6bEgemyNJ.jpg"/>
+    <date>2010</date>
+    <country lang="en">United States of America</country>
+    <star-rating>
+      <value>6.6/10</value>
+    </star-rating>
+  </programme>
+  <programme start="20200102203000 +0000" stop="20200102234500 +0000" channel="channel.id">
+    <title lang="en">Terminator 2: Judgment Day</title>
+    <desc lang="en">Nearly 10 years have passed since Sarah Connor was targeted for termination by a cyborg from the future. Now her son, John, the future leader of the resistance, is the target for a newer, more deadly terminator. Once again, the resistance has managed to send a protector back to attempt to save John and his mother Sarah.
 
-Year: 1988
-Genre: Action, Thriller
+Cast: Arnold Schwarzenegger, Linda Hamilton, Robert Patrick, Edward Furlong, Michael Edwards
+Director: James Cameron
+Genre: Action, Thriller, Science Fiction
+Year: 1991
+Country: United States of America
+Rating: 8.0
 Language: English
-Country: USA
-Popularity: 21.5
-Score: 53.5</desc>
-		<date>1988</date>
-		<category>Movie / Drama</category>
-		<sub-title lang="xx">1988 - Action, Thriller</sub-title>
-		<icon src="http://image.tmdb.org/t/p/w300/mc7MubOLcIw3MDvnuQFrO9psfCa.jpg" />
-		<credits>
-			<director>John McTiernan</director>
-			<actor>Bruce Willis</actor>
-			<actor>Alan Rickman</actor>
-			<actor>Alexander Godunov</actor>
-			<actor>Bonnie Bedelia</actor>
-			<actor>Reginald VelJohnson</actor>
-			<actor>Paul Gleason</actor>
-			<actor>De'voreaux White</actor>
-			<actor>William Atherton</actor>
-			<actor>Clarence Gilyard Jr.</actor>
-			<actor>Hart Bochner</actor>
-		</credits>
-		<star-rating>
-			<value>7.5/10</value>
-		</star-rating>
-	</programme>
+Score: 52.8</desc>
+    <credits>
+      <director>James Cameron</director>
+      <actor>Arnold Schwarzenegger</actor>
+      <actor>Linda Hamilton</actor>
+      <actor>Robert Patrick</actor>
+      <actor>Edward Furlong</actor>
+      <actor>Michael Edwards</actor>
+      <actor>Joe Morton</actor>
+      <actor>Earl Boen</actor>
+      <actor>Jenette Goldstein</actor>
+      <actor>Xander Berkeley</actor>
+      <actor>S. Epatha Merkerson</actor>
+    </credits>
+    <date>1991</date>
+    <category lang="en">Action</category>
+    <category lang="en">Thriller</category>
+    <category lang="en">Science Fiction</category>
+    <sub-title lang="en">1991 - Action, Thriller, Science Fiction</sub-title>
+    <icon src="http://image.tmdb.org/t/p/w300/4xc8LiXJgscRzMnVvL7xn8vhjxR.jpg"/>
+    <country lang="en">United States of America</country>
+    <star-rating>
+      <value>8.0/10</value>
+    </star-rating>
+  </programme>
 </tv>
 ```
-## Caveats
-* Changing the languages or countries in elastictmdb.conf will not automatically update the languages and/or countries of the movies that have already been cached in the database.
-* Matching improves as more and more movies are cached in Elasticsearch and might not be that accurate with only a few movies cached.
 
 ## Future Work
-This project has been developed for my personal use and I consider it as feature complete as it accomplishes the original deliverable of this project.  The below are list of ideas and improvements which I may implement in future but I cannot give any timelines.
-
-* Create a utility to pre-cache a few hundred or a few thousand movies, to solve the low accuracy with a few movies cached
-* Dynamically increase min_score_valid and min_score_no_search parameters based on the number of movies already cached in ElasticSearch.
-* Allow for customisation of the description string returned by process_xmltv.py to be able to change order and allow for non-English static text.
-* Extend ElasticTMDB to cover also TV shows.
+* Containerise the application
+* Create a Docker Compose file to easily get started
+* Publish to PyPy
 
 ## License
 
@@ -230,5 +220,5 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 
 ## Acknowledgments
 
-* The Movie Database for their awesome database, API and service to the community.
+* The Movie Database (TMDB) for their awesome database, API and service to the community.
 * Elastic.co for developing such great tools and their really best-of-class documentation.
