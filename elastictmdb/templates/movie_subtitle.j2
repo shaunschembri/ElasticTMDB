@@ -1,0 +1,3 @@
+{% if record._source.year %}{{ record._source.year }}{% endif -%}
+{% if record._source.genre %}{% if record._source.year %} - {% endif -%}
+{% for genre in record._source.genre %}{{ genre }}{{ ", " if not loop.last }}{% endfor %}{% endif -%}

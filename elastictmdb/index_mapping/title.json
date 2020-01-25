@@ -1,0 +1,106 @@
+{
+    "settings": {
+        "number_of_shards": 1,
+        "number_of_replicas": 0,
+        "analysis": {
+            "normalizer": {
+                "title_normalizer": {
+                    "type": "custom",
+                    "char_filter": [
+                        "special_characters_filter"
+                    ],
+                    "filter": [
+                        "lowercase",
+                        "asciifolding"
+                    ]
+                }
+            },
+            "char_filter": {
+                "special_characters_filter": {
+                    "pattern": "[^A-Za-z0-9]",
+                    "type": "pattern_replace",
+                    "replacement": ""
+                }
+            }
+        }
+    },
+    "mappings": {
+        "properties": {
+            "alias": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 100,
+                        "normalizer": "title_normalizer"
+                    }
+                }
+            },
+            "credits": {
+                "properties": {
+                    "actor": {
+                        "type": "text"
+                    },
+                    "director": {
+                        "type": "text"
+                    },
+                    "other": {
+                        "type": "text"
+                    }
+                }
+            },
+            "country": {
+                "type": "keyword"
+            },
+            "description": {
+                "type": "keyword"
+            },
+            "genre": {
+                "type": "short"
+            },
+            "image": {
+                "type": "keyword"
+            },
+            "ids": {
+                "properties": {
+                    "tmdb": {
+                        "type": "keyword"
+                    }
+                }
+            },
+            "language": {
+                "type": "keyword"
+            },
+            "rating": {
+                "properties": {
+                    "tmdb": {
+                        "properties": {
+                            "votes": {
+                                "type": "integer"
+                            },
+                            "average": {
+                                "type": "half_float"
+                            }
+                        }
+                    }
+                }
+            },
+            "title": {
+                "type": "text",
+                "fields": {
+                    "keyword": {
+                        "type": "keyword",
+                        "ignore_above": 100,
+                        "normalizer": "title_normalizer"
+                    }
+                }
+            },
+            "year": {
+                "type": "short"
+            },
+            "@timestamp": {
+                "type": "date"
+            }
+        }
+    }
+}

@@ -1,0 +1,11 @@
+{% if (record._source.description is defined) and record._source.description %}{{ record._source.description }}
+
+{% endif -%}
+{% if record._source.episode_title is defined %}Title: {{ record._source.episode_title }}
+{% endif -%}
+{% if record._source.season is defined %}{% if record._source.episode is defined %}Number: S{{ '%02d' % record._source.season }}E{{ '%02d' % record._source.episode }}
+{% endif -%}{% endif -%}
+{% if record._source.air_date is defined %}First Aired: {{ record._source.air_date }}
+{% else %}Year: {{ record._source.year }}
+{% endif -%}
+Score: {{ '%0.1f' % record._score }}

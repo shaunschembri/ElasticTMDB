@@ -1,0 +1,2 @@
+{% if record._source.season is defined %}{% if record._source.episode is defined %}S{{ '%02d' % record._source.season }}E{{ '%02d' % record._source.episode }}{% if record._source.episode_title is defined %} - {% endif -%}{% endif -%}{% endif -%}
+{% if record._source.episode_title is defined %}{{ record._source.episode_title }}{% endif -%}
