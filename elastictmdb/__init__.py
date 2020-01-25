@@ -38,7 +38,7 @@ class ElasticTMDB(object):
         if self.config["initial_cache_tmdb"]:
             self.cache_configuration()
         else:
-            logging.debug("Skipping Inital TMDB config...some functions might break")
+            logging.debug("Skipping Initial TMDB config...some functions might break")
 
     def load_template(self, templateFile):
         with open(os.path.join(os.path.dirname(__file__), "templates", templateFile), "r") as templateFile:
