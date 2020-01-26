@@ -14,7 +14,7 @@ class ElasticTMDB(object):
         # Set HTTP headers for TMDB requests
         self.headers = {}
         self.headers["content-type"] = "application/json;charset=utf-8"
-        self.headers["Accept-Encoding"] = "gzip, deflate, br"
+        self.headers["Accept-Encoding"] = "gzip"
 
         if not self.config["extra_logging"]:
             logging.getLogger("elasticsearch").setLevel(logging.WARNING)
